@@ -37,8 +37,14 @@ struct ContentView: View {
 }
 
 struct HomeView: View {
-    @State private var timers: [TimerItem] = [TimerItem()]
+    @State private var timers: [TimerItem]
     @State private var selectedTimerID: UUID?
+
+    init() {
+        let initialTimer = TimerItem()
+        _timers = State(initialValue: [initialTimer])
+        _selectedTimerID = State(initialValue: initialTimer.id)
+    }
 
     var body: some View {
         NavigationSplitView {
@@ -78,17 +84,15 @@ struct HomeView: View {
             .navigationSplitViewColumnWidth(min: 200, ideal: 220)
             #endif
         } detail: {
-            if let selectedID = selectedTimerID,
-               let index = timers.firstIndex(where: { $0.id == selectedID }) {
-                TimerDetailView(timer: $timers[index])
+            if timers.count == 1 {
+                // Single timer: show big clock
+                TimerDetailView(timer: $timers[0])
+            } else if timers.count > 1 {
+                // Multiple timers: show list with small clocks
+                TimerListDetailView(timers: $timers)
             } else {
-                Text("Select a timer")
+                Text("Add a timer")
                     .foregroundColor(.secondary)
-            }
-        }
-        .onAppear {
-            if selectedTimerID == nil, let first = timers.first {
-                selectedTimerID = first.id
             }
         }
     }
@@ -153,12 +157,43 @@ struct TimerDetailView: View {
 
             TimerView(timerItem: $timer)
                 .frame(width: 280, height: 280)
-
-            Text(formatTime(timer.remainingSeconds))
-                .font(.system(size: 48, weight: .bold, design: .monospaced))
-                .foregroundColor(timer.remainingSeconds > 0 ? .primary : .secondary)
         }
         .padding(30)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct TimerListDetailView: View {
+    @Binding var timers: [TimerItem]
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                ForEach($timers) { $timer in
+                    HStack(spacing: 20) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            TextField("Timer name", text: $timer.label)
+                                .textFieldStyle(.plain)
+                                .font(.headline)
+
+                            Text(formatTime(timer.remainingSeconds))
+                                .font(.system(size: 24, weight: .bold, design: .monospaced))
+                                .foregroundColor(timer.remainingSeconds > 0 ? .primary : .secondary)
+                        }
+                        .frame(minWidth: 120, alignment: .leading)
+
+                        Spacer()
+
+                        TimerView(timerItem: $timer)
+                            .frame(width: 120, height: 120)
+                    }
+                    .padding(16)
+                    .background(Color(white: 0.97))
+                    .cornerRadius(12)
+                }
+            }
+            .padding(20)
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
