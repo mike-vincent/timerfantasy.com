@@ -7,9 +7,16 @@ struct TimerView: View {
     @State private var isRunning = false
     @State private var timer: Timer?
     @State private var isDragging = false
+    @State private var maxMinutes: Double = 60
 
-    private let maxMinutes: Double = 60
-    private let tickMarks = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
+    // Even numbers only for max time options
+    private let maxTimeOptions: [Int] = [10, 20, 30, 60, 90, 120, 180, 240]
+
+    // Computed tick marks based on maxMinutes (always 12 divisions)
+    private var tickMarks: [Int] {
+        let interval = Int(maxMinutes) / 12
+        return (0..<12).map { $0 * interval }
+    }
 
     var body: some View {
         GeometryReader { geometry in
@@ -18,19 +25,19 @@ struct TimerView: View {
             let radius = size / 2 - 20
 
             ZStack {
-                // Background circle (red = remaining time)
+                // Background circle (gray = remaining time area)
                 Circle()
-                    .fill(totalSeconds > 0 ? Color.red.opacity(0.85) : Color(white: 0.95))
+                    .fill(Color(white: 0.95))
                     .frame(width: size - 40, height: size - 40)
 
-                // Gray pie (elapsed time - grows as time passes)
+                // Red pie (elapsed time - grows as time passes)
                 if totalSeconds > 0 {
                     let elapsedSeconds = totalSeconds - remainingSeconds
                     PieSlice(
                         startAngle: .degrees(-90),
-                        endAngle: .degrees(-90 + (elapsedSeconds / (maxMinutes * 60)) * 360)
+                        endAngle: .degrees(-90 + (elapsedSeconds / totalSeconds) * 360)
                     )
-                    .fill(Color(white: 0.95))
+                    .fill(Color.red.opacity(0.85))
                     .frame(width: size - 44, height: size - 44)
                 }
 
@@ -70,6 +77,32 @@ struct TimerView: View {
                         .padding(.bottom, 40)
                 }
                 .frame(width: size - 40, height: size - 40)
+
+                // Max time picker (bottom right)
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Menu {
+                            ForEach(maxTimeOptions, id: \.self) { minutes in
+                                Button("\(minutes)m") {
+                                    resetTimer()
+                                    maxMinutes = Double(minutes)
+                                }
+                            }
+                        } label: {
+                            Text("\(Int(maxMinutes))m")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.gray)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(Color.white.opacity(0.8))
+                                .cornerRadius(4)
+                        }
+                        .menuStyle(.borderlessButton)
+                    }
+                }
+                .padding(8)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .gesture(
@@ -90,19 +123,14 @@ struct TimerView: View {
         }
     }
 
-    // Numbers go clockwise but descending: 0 at top, then 55, 50, 45...
-    // So 0 min = 0°, 5 min = 30°, 10 min = 60°, etc.
+    // Numbers go clockwise but descending: 0 at top, then (max-interval), (max-2*interval)...
     private func angleForMinute(_ minute: Int) -> Double {
-        // Convert minute to angle: 0->0°, 5->30°, 10->60°...
-        // But we want descending, so 0 at top, 55 next (clockwise)
-        // 60 - minute gives us: 0->0, 55->5, 50->10...
-        // Wait, the numbers on face are 0,55,50,45... going clockwise
-        // So position for "55" label is at 30° (one tick clockwise from top)
-        // Position for "0" label is at 0° (top)
         if minute == 0 {
             return 0
         }
-        return Double(60 - minute) * 6  // 6 degrees per minute
+        // Each minute = 360/maxMinutes degrees
+        let degreesPerMinute = 360.0 / maxMinutes
+        return Double(Int(maxMinutes) - minute) * degreesPerMinute
     }
 
     private func handleDrag(value: DragGesture.Value, center: CGPoint, radius: CGFloat) {
