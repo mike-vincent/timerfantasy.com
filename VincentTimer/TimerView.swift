@@ -50,7 +50,7 @@ struct TimerView: View {
                 // Major tick marks and numbers
                 ForEach(tickMarks, id: \.self) { minute in
                     let angle = angleForMinute(minute)
-                    let numberRadius = radius - size * 0.09
+                    let numberRadius = radius - size * 0.08
                     let isMajor = minute % Int(timerItem.maxMinutes / 4) == 0
                     let tickHeight = isMajor ? size * 0.05 : size * 0.03
 
@@ -60,8 +60,9 @@ struct TimerView: View {
                         .offset(y: -radius + tickHeight / 2)
                         .rotationEffect(.degrees(angle))
 
+                    // Clock numerals
                     Text("\(minute)")
-                        .font(.system(size: size * 0.05, weight: .medium))
+                        .font(.system(size: max(size * 0.05, 6), weight: .medium))
                         .foregroundColor(.black)
                         .position(
                             x: center.x + numberRadius * CGFloat(sin(angle * .pi / 180)),
@@ -74,15 +75,6 @@ struct TimerView: View {
                     .fill(Color.black)
                     .frame(width: size * 0.04, height: size * 0.04)
 
-                // Digital time display
-                VStack {
-                    Spacer()
-                    Text(formatTime(timerItem.remainingSeconds))
-                        .font(.system(size: size * 0.08, weight: .bold, design: .monospaced))
-                        .foregroundColor(.primary)
-                        .padding(.bottom, size * 0.12)
-                }
-                .frame(width: size - 40, height: size - 40)
 
                 // Max time picker (only show if size > 150)
                 if size > 150 {
@@ -120,13 +112,37 @@ struct TimerView: View {
                     }
                     .onEnded { _ in
                         isDragging = false
-                        if timerItem.totalSeconds > 0 && !timerItem.isRunning {
-                            startTimer()
-                        }
                     }
             )
             .onTapGesture(count: 2) {
                 resetTimer()
+            }
+            .onDisappear {
+                stopTimer()
+            }
+            .onChange(of: timerItem.isRunning) { _, isRunning in
+                if isRunning && timer == nil {
+                    startTimerInternal()
+                } else if !isRunning {
+                    timer?.invalidate()
+                    timer = nil
+                }
+            }
+        }
+    }
+
+    private func startTimerInternal() {
+        timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            guard timerItem.isRunning else {
+                stopTimer()
+                return
+            }
+            if timerItem.remainingSeconds > 0 {
+                timerItem.remainingSeconds -= 0.1
+            } else {
+                timerItem.remainingSeconds = 0
+                stopTimer()
+                playCompletionSound()
             }
         }
     }
@@ -150,7 +166,7 @@ struct TimerView: View {
 
         let minutes = ccwAngle / 360 * timerItem.maxMinutes
         let seconds = minutes * 60
-        let snappedSeconds = (seconds / 30).rounded() * 30
+        let snappedSeconds = seconds.rounded()
 
         timerItem.totalSeconds = min(snappedSeconds, timerItem.maxMinutes * 60)
         timerItem.remainingSeconds = min(snappedSeconds, timerItem.maxMinutes * 60)
@@ -159,6 +175,11 @@ struct TimerView: View {
     private func startTimer() {
         timerItem.isRunning = true
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
+            // Check if timer was stopped externally
+            guard timerItem.isRunning else {
+                stopTimer()
+                return
+            }
             if timerItem.remainingSeconds > 0 {
                 timerItem.remainingSeconds -= 0.1
             } else {
