@@ -5,29 +5,11 @@ struct VincentTimerApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
-                .background(VisualEffectBackground())
+                .background(Color.black)
+                .frame(minWidth: 375, minHeight: 600)
         }
-        .windowStyle(.hiddenTitleBar)
-        .defaultSize(width: 800, height: 600)
+        .windowStyle(.automatic)
+        .defaultSize(width: 375, height: 600)
+        .windowResizability(.contentMinSize)
     }
 }
-
-#if os(macOS)
-struct VisualEffectBackground: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.blendingMode = .behindWindow
-        view.state = .active
-        view.material = .hudWindow
-        return view
-    }
-
-    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {}
-}
-#else
-struct VisualEffectBackground: View {
-    var body: some View {
-        Color.clear.background(.ultraThinMaterial)
-    }
-}
-#endif
