@@ -42,25 +42,26 @@ struct TimerView: View {
                     let angle = -(Double(minute) / timerItem.maxMinutes) * 360
                     Rectangle()
                         .fill(Color.gray.opacity(0.5))
-                        .frame(width: 1, height: 5)
-                        .offset(y: -radius + 2.5)
+                        .frame(width: size * 0.004, height: size * 0.02)
+                        .offset(y: -radius + size * 0.01)
                         .rotationEffect(.degrees(angle))
                 }
 
                 // Major tick marks and numbers
                 ForEach(tickMarks, id: \.self) { minute in
                     let angle = angleForMinute(minute)
-                    let numberRadius = radius - 25
+                    let numberRadius = radius - size * 0.09
                     let isMajor = minute % Int(timerItem.maxMinutes / 4) == 0
+                    let tickHeight = isMajor ? size * 0.05 : size * 0.03
 
                     Rectangle()
                         .fill(Color.gray)
-                        .frame(width: 2, height: isMajor ? 15 : 8)
-                        .offset(y: -radius + (isMajor ? 7.5 : 4))
+                        .frame(width: size * 0.007, height: tickHeight)
+                        .offset(y: -radius + tickHeight / 2)
                         .rotationEffect(.degrees(angle))
 
                     Text("\(minute)")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: size * 0.05, weight: .medium))
                         .foregroundColor(.black)
                         .position(
                             x: center.x + numberRadius * CGFloat(sin(angle * .pi / 180)),
@@ -71,7 +72,7 @@ struct TimerView: View {
                 // Center dot
                 Circle()
                     .fill(Color.black)
-                    .frame(width: 12, height: 12)
+                    .frame(width: size * 0.04, height: size * 0.04)
 
                 // Digital time display
                 VStack {
@@ -83,31 +84,33 @@ struct TimerView: View {
                 }
                 .frame(width: size - 40, height: size - 40)
 
-                // Max time picker
-                VStack {
-                    Spacer()
-                    HStack {
+                // Max time picker (only show if size > 150)
+                if size > 150 {
+                    VStack {
                         Spacer()
-                        Menu {
-                            ForEach(maxTimeOptions, id: \.self) { minutes in
-                                Button("\(minutes)m") {
-                                    resetTimer()
-                                    timerItem.maxMinutes = Double(minutes)
+                        HStack {
+                            Spacer()
+                            Menu {
+                                ForEach(maxTimeOptions, id: \.self) { minutes in
+                                    Button("\(minutes)m") {
+                                        resetTimer()
+                                        timerItem.maxMinutes = Double(minutes)
+                                    }
                                 }
+                            } label: {
+                                Text("\(Int(timerItem.maxMinutes))m")
+                                    .font(.system(size: size * 0.04, weight: .medium))
+                                    .foregroundColor(.gray)
+                                    .padding(.horizontal, size * 0.02)
+                                    .padding(.vertical, size * 0.01)
+                                    .background(Color.white.opacity(0.8))
+                                    .cornerRadius(4)
                             }
-                        } label: {
-                            Text("\(Int(timerItem.maxMinutes))m")
-                                .font(.system(size: 10, weight: .medium))
-                                .foregroundColor(.gray)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background(Color.white.opacity(0.8))
-                                .cornerRadius(4)
+                            .menuStyle(.borderlessButton)
                         }
-                        .menuStyle(.borderlessButton)
                     }
+                    .padding(size * 0.02)
                 }
-                .padding(6)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .gesture(
