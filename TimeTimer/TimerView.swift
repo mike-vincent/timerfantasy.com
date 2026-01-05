@@ -25,25 +25,22 @@ struct TimerView: View {
             let radius = size / 2 - 20
 
             ZStack {
-                // Background circle (gray)
+                // Background circle (gray = remaining time area)
                 Circle()
                     .fill(Color(white: 0.95))
                     .frame(width: size - 40, height: size - 40)
 
-                // Red pie (remaining time - starts at 0/left, grows CW)
+                // Red pie (remaining time - shrinks as time passes)
                 if remainingSeconds > 0 {
-                    let remainingAngle = (remainingSeconds / (maxMinutes * 60)) * 360
-                    // 0 is at 180° (left/9 o'clock), grows CW (positive direction in SwiftUI)
                     PieSlice(
-                        startAngle: .degrees(180),
-                        endAngle: .degrees(180 + remainingAngle),
-                        clockwise: false
+                        startAngle: .degrees(-90),
+                        endAngle: .degrees(-90 + (remainingSeconds / (maxMinutes * 60)) * 360)
                     )
                     .fill(Color.red.opacity(0.85))
                     .frame(width: size - 44, height: size - 44)
                 }
 
-                // Tick marks and numbers (0 at left, ascending clockwise: 0, 5, 10, 15...)
+                // Tick marks and numbers (descending clockwise: 0, 55, 50, 45...)
                 ForEach(tickMarks, id: \.self) { minute in
                     let angle = angleForMinute(minute)
                     let numberRadius = radius - 25
@@ -51,8 +48,8 @@ struct TimerView: View {
                     // Tick mark
                     Rectangle()
                         .fill(Color.gray)
-                        .frame(width: 2, height: minute % Int(maxMinutes / 4) == 0 ? 15 : 8)
-                        .offset(y: -radius + (minute % Int(maxMinutes / 4) == 0 ? 7.5 : 4))
+                        .frame(width: 2, height: minute % 15 == 0 ? 15 : 8)
+                        .offset(y: -radius + (minute % 15 == 0 ? 7.5 : 4))
                         .rotationEffect(.degrees(angle))
 
                     // Number label
@@ -60,8 +57,8 @@ struct TimerView: View {
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.black)
                         .position(
-                            x: center.x + numberRadius * CGFloat(cos((angle - 90) * .pi / 180)),
-                            y: center.y + numberRadius * CGFloat(sin((angle - 90) * .pi / 180))
+                            x: center.x + numberRadius * CGFloat(sin(angle * .pi / 180)),
+                            y: center.y - numberRadius * CGFloat(cos(angle * .pi / 180))
                         )
                 }
 
@@ -125,10 +122,14 @@ struct TimerView: View {
         }
     }
 
-    // 0 at left (180°), numbers go CW ascending: 0, 5, 10, 15...
+    // Numbers go clockwise but descending: 0 at top, then (max-interval), (max-2*interval)...
     private func angleForMinute(_ minute: Int) -> Double {
-        // 180° + (minute/maxMinutes * 360)
-        return 180 + (Double(minute) / maxMinutes) * 360
+        if minute == 0 {
+            return 0
+        }
+        // Each minute = 360/maxMinutes degrees
+        let degreesPerMinute = 360.0 / maxMinutes
+        return Double(Int(maxMinutes) - minute) * degreesPerMinute
     }
 
     private func handleDrag(value: DragGesture.Value, center: CGPoint, radius: CGFloat) {
@@ -140,13 +141,11 @@ struct TimerView: View {
             dy: value.location.y - center.y
         )
 
-        // Calculate angle from left (0 position at 180°), going CW
-        var angle = atan2(vector.dy, vector.dx) * 180 / .pi  // Standard angle from right
-        // Convert to angle from left (0 position): subtract 180
-        angle = angle - 180
+        // Calculate angle from top (0°), going clockwise
+        var angle = atan2(vector.dx, -vector.dy) * 180 / .pi
         if angle < 0 { angle += 360 }
 
-        // Convert angle to minutes (0° from left = 0 min, 360° = maxMinutes)
+        // Convert angle to minutes (0° = 0 min, 360° = 60 min)
         let minutes = angle / 360 * maxMinutes
         let seconds = minutes * 60
 
@@ -196,7 +195,6 @@ struct TimerView: View {
 struct PieSlice: Shape {
     var startAngle: Angle
     var endAngle: Angle
-    var clockwise: Bool = false
 
     func path(in rect: CGRect) -> Path {
         var path = Path()
@@ -209,7 +207,7 @@ struct PieSlice: Shape {
             radius: radius,
             startAngle: startAngle,
             endAngle: endAngle,
-            clockwise: clockwise
+            clockwise: false
         )
         path.closeSubpath()
 
