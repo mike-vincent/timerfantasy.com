@@ -2,19 +2,14 @@ import SwiftUI
 import AVFoundation
 
 struct TimerView: View {
-    @State private var totalSeconds: Double = 0
-    @State private var remainingSeconds: Double = 0
-    @State private var isRunning = false
+    @Binding var timerItem: TimerItem
     @State private var timer: Timer?
     @State private var isDragging = false
-    @State private var maxMinutes: Double = 60
 
-    // Even numbers only for max time options
     private let maxTimeOptions: [Int] = [10, 20, 30, 60, 90, 120, 180, 240]
 
-    // Computed tick marks based on maxMinutes (always 12 divisions)
     private var tickMarks: [Int] {
-        let interval = Int(maxMinutes) / 12
+        let interval = Int(timerItem.maxMinutes) / 12
         return (0..<12).map { $0 * interval }
     }
 
@@ -25,14 +20,14 @@ struct TimerView: View {
             let radius = size / 2 - 20
 
             ZStack {
-                // Background circle (gray = remaining time area)
+                // Background circle (white)
                 Circle()
-                    .fill(Color(white: 0.95))
+                    .fill(Color.white)
                     .frame(width: size - 40, height: size - 40)
 
-                // Red pie (remaining time - grows CCW from 0, shrinks as time passes)
-                if remainingSeconds > 0 {
-                    let angle = (remainingSeconds / (maxMinutes * 60)) * 360
+                // Red pie (remaining time)
+                if timerItem.remainingSeconds > 0 {
+                    let angle = (timerItem.remainingSeconds / (timerItem.maxMinutes * 60)) * 360
                     PieSlice(
                         startAngle: .degrees(-90),
                         endAngle: .degrees(-90 - angle),
@@ -42,19 +37,28 @@ struct TimerView: View {
                     .frame(width: size - 44, height: size - 44)
                 }
 
-                // Tick marks and numbers (descending clockwise: 0, 55, 50, 45...)
+                // Small minute tick marks
+                ForEach(0..<Int(timerItem.maxMinutes), id: \.self) { minute in
+                    let angle = -(Double(minute) / timerItem.maxMinutes) * 360
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.5))
+                        .frame(width: 1, height: 5)
+                        .offset(y: -radius + 2.5)
+                        .rotationEffect(.degrees(angle))
+                }
+
+                // Major tick marks and numbers
                 ForEach(tickMarks, id: \.self) { minute in
                     let angle = angleForMinute(minute)
                     let numberRadius = radius - 25
+                    let isMajor = minute % Int(timerItem.maxMinutes / 4) == 0
 
-                    // Tick mark
                     Rectangle()
                         .fill(Color.gray)
-                        .frame(width: 2, height: minute % 15 == 0 ? 15 : 8)
-                        .offset(y: -radius + (minute % 15 == 0 ? 7.5 : 4))
+                        .frame(width: 2, height: isMajor ? 15 : 8)
+                        .offset(y: -radius + (isMajor ? 7.5 : 4))
                         .rotationEffect(.degrees(angle))
 
-                    // Number label
                     Text("\(minute)")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(.black)
@@ -69,17 +73,7 @@ struct TimerView: View {
                     .fill(Color.black)
                     .frame(width: 12, height: 12)
 
-                // Time display
-                VStack {
-                    Spacer()
-                    Text(formatTime(remainingSeconds))
-                        .font(.system(size: 24, weight: .bold, design: .monospaced))
-                        .foregroundColor(.black)
-                        .padding(.bottom, 40)
-                }
-                .frame(width: size - 40, height: size - 40)
-
-                // Max time picker (bottom right)
+                // Max time picker
                 VStack {
                     Spacer()
                     HStack {
@@ -88,22 +82,22 @@ struct TimerView: View {
                             ForEach(maxTimeOptions, id: \.self) { minutes in
                                 Button("\(minutes)m") {
                                     resetTimer()
-                                    maxMinutes = Double(minutes)
+                                    timerItem.maxMinutes = Double(minutes)
                                 }
                             }
                         } label: {
-                            Text("\(Int(maxMinutes))m")
-                                .font(.system(size: 12, weight: .medium))
+                            Text("\(Int(timerItem.maxMinutes))m")
+                                .font(.system(size: 10, weight: .medium))
                                 .foregroundColor(.gray)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
                                 .background(Color.white.opacity(0.8))
                                 .cornerRadius(4)
                         }
                         .menuStyle(.borderlessButton)
                     }
                 }
-                .padding(8)
+                .padding(6)
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
             .gesture(
@@ -113,7 +107,7 @@ struct TimerView: View {
                     }
                     .onEnded { _ in
                         isDragging = false
-                        if totalSeconds > 0 && !isRunning {
+                        if timerItem.totalSeconds > 0 && !timerItem.isRunning {
                             startTimer()
                         }
                     }
@@ -124,10 +118,8 @@ struct TimerView: View {
         }
     }
 
-    // Numbers go CCW: 0 at top, 5 to the left, 10 further left, etc.
     private func angleForMinute(_ minute: Int) -> Double {
-        // Negative angle = CCW from top
-        return -(Double(minute) / maxMinutes) * 360
+        return -(Double(minute) / timerItem.maxMinutes) * 360
     }
 
     private func handleDrag(value: DragGesture.Value, center: CGPoint, radius: CGFloat) {
@@ -139,32 +131,25 @@ struct TimerView: View {
             dy: value.location.y - center.y
         )
 
-        // Calculate angle from top, CCW is positive time
         var angle = atan2(vector.dx, -vector.dy) * 180 / .pi
-        // Convert: left side (negative angle) = positive time
-        if angle > 0 {
-            angle = angle - 360
-        }
-        let ccwAngle = -angle  // CCW angle as positive
+        if angle > 0 { angle = angle - 360 }
+        let ccwAngle = -angle
 
-        // Convert angle to minutes
-        let minutes = ccwAngle / 360 * maxMinutes
+        let minutes = ccwAngle / 360 * timerItem.maxMinutes
         let seconds = minutes * 60
-
-        // Snap to nearest 30 seconds
         let snappedSeconds = (seconds / 30).rounded() * 30
 
-        totalSeconds = min(snappedSeconds, maxMinutes * 60)
-        remainingSeconds = min(snappedSeconds, maxMinutes * 60)
+        timerItem.totalSeconds = min(snappedSeconds, timerItem.maxMinutes * 60)
+        timerItem.remainingSeconds = min(snappedSeconds, timerItem.maxMinutes * 60)
     }
 
     private func startTimer() {
-        isRunning = true
+        timerItem.isRunning = true
         timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
-            if remainingSeconds > 0 {
-                remainingSeconds -= 0.1
+            if timerItem.remainingSeconds > 0 {
+                timerItem.remainingSeconds -= 0.1
             } else {
-                remainingSeconds = 0
+                timerItem.remainingSeconds = 0
                 stopTimer()
                 playCompletionSound()
             }
@@ -172,25 +157,23 @@ struct TimerView: View {
     }
 
     private func stopTimer() {
-        isRunning = false
+        timerItem.isRunning = false
         timer?.invalidate()
         timer = nil
     }
 
     private func resetTimer() {
         stopTimer()
-        totalSeconds = 0
-        remainingSeconds = 0
+        timerItem.totalSeconds = 0
+        timerItem.remainingSeconds = 0
     }
 
     private func playCompletionSound() {
+        #if os(macOS)
         NSSound.beep()
-    }
-
-    private func formatTime(_ seconds: Double) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
+        #else
+        AudioServicesPlaySystemSound(1005) // System sound for iOS
+        #endif
     }
 }
 
@@ -219,7 +202,13 @@ struct PieSlice: Shape {
 }
 
 #Preview {
-    TimerView()
-        .frame(width: 300, height: 300)
-        .padding()
+    struct PreviewWrapper: View {
+        @State var item = TimerItem()
+        var body: some View {
+            TimerView(timerItem: $item)
+                .frame(width: 300, height: 300)
+                .padding()
+        }
+    }
+    return PreviewWrapper()
 }
