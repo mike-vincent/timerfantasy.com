@@ -6,10 +6,10 @@ struct VincentTimerApp: App {
         WindowGroup {
             ContentView()
                 .background(Color.black)
-                .frame(minWidth: 375, minHeight: 600)
+                .frame(minWidth: 360, minHeight: 640)
         }
         .windowStyle(.automatic)
-        .defaultSize(width: 375, height: 600)
+        .defaultSize(width: 360, height: 640)
         .windowResizability(.contentMinSize)
     }
 }

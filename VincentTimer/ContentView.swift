@@ -2,32 +2,123 @@ import SwiftUI
 import Combine
 import AppKit
 
+// MARK: - Timer Model
+class TimerModel: ObservableObject, Identifiable {
+    let id = UUID()
+    @Published var selectedHours = 0
+    @Published var selectedMinutes = 15
+    @Published var selectedSeconds = 0
+    @Published var timerState: TimerState = .idle
+    @Published var timeRemaining: TimeInterval = 0
+    @Published var endTime: Date?
+    @Published var timerLabel: String = "Timer"
+    @Published var selectedAlarmSound: String = "Radial (Default)"
+    @Published var selectedClockface: ClockfaceScale = .hours168
+
+    enum TimerState { case idle, running, paused }
+
+    var totalSetSeconds: TimeInterval {
+        TimeInterval(selectedHours * 3600 + selectedMinutes * 60 + selectedSeconds)
+    }
+
+    func start() {
+        guard totalSetSeconds > 0 else { return }
+        timeRemaining = totalSetSeconds
+        endTime = Date().addingTimeInterval(totalSetSeconds)
+        timerState = .running
+        selectedClockface = ClockfaceScale.allCases.last { $0.seconds >= totalSetSeconds } ?? .hours168
+    }
+
+    func pause() { timerState = .paused }
+
+    func resume() {
+        endTime = Date().addingTimeInterval(timeRemaining)
+        timerState = .running
+    }
+
+    func cancel() {
+        timerState = .idle
+        timeRemaining = 0
+        endTime = nil
+    }
+
+    func update() {
+        guard timerState == .running, let end = endTime else { return }
+        let remaining = end.timeIntervalSinceNow
+        if remaining <= 0 {
+            timeRemaining = 0
+            timerState = .idle
+            NSSound.beep()
+        } else {
+            timeRemaining = remaining
+        }
+    }
+}
+
+// MARK: - Clockface Scale (top level)
+enum ClockfaceScale: CaseIterable {
+    case hours168, hours96, hours72, hours48, hours24, minutes120, minutes60, minutes15, minutes5
+
+    var seconds: Double {
+        switch self {
+        case .hours168: return 168 * 3600
+        case .hours96: return 96 * 3600
+        case .hours72: return 72 * 3600
+        case .hours48: return 48 * 3600
+        case .hours24: return 24 * 3600
+        case .minutes120: return 120 * 60
+        case .minutes60: return 60 * 60
+        case .minutes15: return 15 * 60
+        case .minutes5: return 5 * 60
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .hours168: return "168 hr"
+        case .hours96: return "96 hr"
+        case .hours72: return "72 hr"
+        case .hours48: return "48 hr"
+        case .hours24: return "24 hr"
+        case .minutes120: return "120 min"
+        case .minutes60: return "60 min"
+        case .minutes15: return "15 min"
+        case .minutes5: return "5 min"
+        }
+    }
+}
+
 // MARK: - Main View
 struct ContentView: View {
-    @State private var selectedTab = "VincentTimer"
+    @State private var timers: [TimerModel] = [TimerModel()]
+    let globalTimer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
 
     var body: some View {
         NavigationStack {
-            ClockTimerView()
-                .preferredColorScheme(.dark)
-                .toolbar {
-                    ToolbarItem(placement: .principal) {
-                        Picker("", selection: $selectedTab) {
-                            Text("VincentTimer").tag("VincentTimer")
-                        }
-                        .pickerStyle(.segmented)
-                        .fixedSize()
-                    }
-                    ToolbarItem(placement: .primaryAction) {
-                        Button(action: {
-                            // Add new timer action
-                        }) {
-                            Image(systemName: "plus")
-                        }
+            ScrollView {
+                LazyVStack(spacing: 0) {
+                    ForEach(timers) { timer in
+                        ClockTimerView(timer: timer)
                     }
                 }
-                .toolbarBackground(.black, for: .windowToolbar)
-                .toolbarColorScheme(.dark, for: .windowToolbar)
+            }
+            .preferredColorScheme(.dark)
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button(action: {
+                        timers.insert(TimerModel(), at: 0)
+                    }) {
+                        Image(systemName: "plus")
+                    }
+                }
+            }
+            .toolbarBackground(.black, for: .windowToolbar)
+            .toolbarColorScheme(.dark, for: .windowToolbar)
+        }
+        .onReceive(globalTimer) { _ in
+            for timer in timers {
+                timer.update()
+            }
         }
     }
 }
@@ -62,18 +153,7 @@ struct RecentTimer: Identifiable, Equatable {
 
 // MARK: - Timer View
 struct ClockTimerView: View {
-    @State private var selectedHours = 0
-    @State private var selectedMinutes = 15
-    @State private var selectedSeconds = 0
-
-    @State private var timerState: TimerState = .idle
-    @State private var totalDuration: TimeInterval = 0
-    @State private var timeRemaining: TimeInterval = 0
-    @State private var endTime: Date?
-    @State private var recentTimers: [RecentTimer] = []
-    @State private var timerLabel: String = "Timer"
-    @State private var selectedAlarmSound: String = "Radial (Default)"
-    @State private var selectedClockface: ClockfaceScale = .hours168
+    @ObservedObject var timer: TimerModel
 
     let alarmSounds = [
         "Radial (Default)", "Arpeggio", "Breaking", "Canopy", "Chalet",
@@ -84,77 +164,19 @@ struct ClockTimerView: View {
         "Silk", "Slow Rise", "Stargaze", "Summit", "Twinkle", "Uplift"
     ]
 
-    enum ClockfaceScale: CaseIterable {
-        case hours168, hours96, hours72, hours48, hours24, minutes120, minutes60, minutes15, minutes5
-
-        var seconds: Double {
-            switch self {
-            case .hours168: return 168 * 3600
-            case .hours96: return 96 * 3600
-            case .hours72: return 72 * 3600
-            case .hours48: return 48 * 3600
-            case .hours24: return 24 * 3600
-            case .minutes120: return 120 * 60
-            case .minutes60: return 60 * 60
-            case .minutes15: return 15 * 60
-            case .minutes5: return 5 * 60
-            }
-        }
-
-        var label: String {
-            switch self {
-            case .hours168: return "168 hr"
-            case .hours96: return "96 hr"
-            case .hours72: return "72 hr"
-            case .hours48: return "48 hr"
-            case .hours24: return "24 hr"
-            case .minutes120: return "120 min"
-            case .minutes60: return "60 min"
-            case .minutes15: return "15 min"
-            case .minutes5: return "5 min"
-            }
-        }
-    }
-
     var availableClockfaces: [ClockfaceScale] {
-        ClockfaceScale.allCases.filter { $0.seconds >= timeRemaining }
+        ClockfaceScale.allCases.filter { $0.seconds >= timer.timeRemaining }
     }
 
     func cycleClockface() {
         let available = availableClockfaces
         guard !available.isEmpty else { return }
-        if let currentIndex = available.firstIndex(of: selectedClockface) {
+        if let currentIndex = available.firstIndex(of: timer.selectedClockface) {
             let nextIndex = (currentIndex + 1) % available.count
-            selectedClockface = available[nextIndex]
+            timer.selectedClockface = available[nextIndex]
         } else {
-            // Current selection not valid, pick smallest valid
-            selectedClockface = available.last ?? .hours24
+            timer.selectedClockface = available.last ?? .hours24
         }
-    }
-
-    let timer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
-
-    // Computed property for setting time in seconds
-    var setSeconds: Binding<TimeInterval> {
-        Binding(
-            get: { TimeInterval(selectedHours * 3600 + selectedMinutes * 60 + selectedSeconds) },
-            set: { newValue in
-                let total = Int(newValue)
-                selectedHours = total / 3600
-                selectedMinutes = (total % 3600) / 60
-                selectedSeconds = total % 60
-            }
-        )
-    }
-
-    var maxSeconds: TimeInterval {
-        168 * 3600 // 168 hours max (1 week)
-    }
-
-    enum TimerState {
-        case idle
-        case running
-        case paused
     }
 
     @FocusState private var focusedField: TimeField?
@@ -163,20 +185,66 @@ struct ClockTimerView: View {
         case hours, minutes, seconds, label
     }
 
+    var rightButtonLabel: String {
+        switch timer.timerState {
+        case .idle, .paused: return "Start"
+        case .running: return "Pause"
+        }
+    }
+
+    var rightButtonColor: Color {
+        switch timer.timerState {
+        case .idle, .paused: return .green
+        case .running: return .orange
+        }
+    }
+
+    func toggleTimer() {
+        switch timer.timerState {
+        case .idle: timer.start()
+        case .running: timer.pause()
+        case .paused: timer.resume()
+        }
+    }
+
+    func formatDuration(_ duration: TimeInterval) -> String {
+        let totalSeconds = Int(ceil(duration))
+        let h = totalSeconds / 3600
+        let m = (totalSeconds % 3600) / 60
+        let s = totalSeconds % 60
+        if h > 0 {
+            return String(format: "%d:%02d:%02d", h, m, s)
+        } else {
+            return String(format: "%02d:%02d", m, s)
+        }
+    }
+
+    func getEndTimeString() -> String {
+        guard let end = timer.endTime else { return "" }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return formatter.string(from: end)
+    }
+
+    func setTimeFromSeconds(_ seconds: Double) {
+        timer.timeRemaining = max(1, seconds)
+        let total = Int(seconds)
+        timer.selectedHours = total / 3600
+        timer.selectedMinutes = (total % 3600) / 60
+        timer.selectedSeconds = total % 60
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             Spacer()
 
             // Time Input Display
-            if timerState == .idle {
+            if timer.timerState == .idle {
                 // Labels row
                 HStack(spacing: 0) {
-                    Text("hr")
-                        .frame(width: 120)
-                    Text("min")
-                        .frame(width: 120)
-                    Text("sec")
-                        .frame(width: 120)
+                    Text("hr").frame(width: 120)
+                    Text("min").frame(width: 120)
+                    Text("sec").frame(width: 120)
                 }
                 .font(.system(size: 16, weight: .regular))
                 .foregroundStyle(.gray)
@@ -184,49 +252,34 @@ struct ClockTimerView: View {
 
                 // Clickable digits
                 HStack(spacing: 0) {
-                    // Hours
-                    TimeDigitField(value: $selectedHours, maxValue: 168, isFocused: focusedField == .hours)
+                    TimeDigitField(value: $timer.selectedHours, maxValue: 168, isFocused: focusedField == .hours)
                         .focused($focusedField, equals: .hours)
-
-                    Text(":")
-                        .font(.system(size: 80, weight: .thin))
-                        .foregroundStyle(.white)
-
-                    // Minutes
-                    TimeDigitField(value: $selectedMinutes, maxValue: 59, isFocused: focusedField == .minutes)
+                    Text(":").font(.system(size: 80, weight: .thin)).foregroundStyle(.white)
+                    TimeDigitField(value: $timer.selectedMinutes, maxValue: 59, isFocused: focusedField == .minutes)
                         .focused($focusedField, equals: .minutes)
-
-                    Text(":")
-                        .font(.system(size: 80, weight: .thin))
-                        .foregroundStyle(.white)
-
-                    // Seconds
-                    TimeDigitField(value: $selectedSeconds, maxValue: 59, isFocused: focusedField == .seconds)
+                    Text(":").font(.system(size: 80, weight: .thin)).foregroundStyle(.white)
+                    TimeDigitField(value: $timer.selectedSeconds, maxValue: 59, isFocused: focusedField == .seconds)
                         .focused($focusedField, equals: .seconds)
                 }
             } else {
                 // Running/Paused: show clock and countdown
                 AnalogTimerView(
-                    remainingSeconds: timeRemaining,
-                    clockfaceSeconds: selectedClockface.seconds,
-                    onSetTime: timerState == .paused ? { newSeconds in
-                        setTimeFromSeconds(newSeconds)
-                    } : nil
+                    remainingSeconds: timer.timeRemaining,
+                    clockfaceSeconds: timer.selectedClockface.seconds,
+                    onSetTime: timer.timerState == .paused ? { setTimeFromSeconds($0) } : nil
                 )
                 .frame(width: 220, height: 220)
                 .padding(.bottom, 20)
 
-                Text(formatDuration(timeRemaining))
+                Text(formatDuration(timer.timeRemaining))
                     .font(.system(size: 60, weight: .thin))
                     .monospacedDigit()
                     .foregroundStyle(.white)
 
-                if let end = endTime {
+                if timer.endTime != nil {
                     HStack(spacing: 4) {
-                        Image(systemName: "bell.fill")
-                            .font(.caption)
-                        Text(getEndTimeString())
-                            .font(.subheadline)
+                        Image(systemName: "bell.fill").font(.caption)
+                        Text(getEndTimeString()).font(.subheadline)
                     }
                     .foregroundStyle(.gray)
                     .padding(.top, 8)
@@ -234,7 +287,7 @@ struct ClockTimerView: View {
 
                 // Clockface cycle button
                 Button(action: cycleClockface) {
-                    Text(selectedClockface.label)
+                    Text(timer.selectedClockface.label)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 16)
@@ -247,9 +300,9 @@ struct ClockTimerView: View {
             }
 
             // Timer label and options (only when idle)
-            if timerState == .idle {
+            if timer.timerState == .idle {
                 VStack(alignment: .leading, spacing: 8) {
-                    TextField("Timer", text: $timerLabel)
+                    TextField("Timer", text: $timer.timerLabel)
                         .textFieldStyle(.plain)
                         .font(.system(size: 13))
                         .foregroundStyle(.white)
@@ -257,13 +310,12 @@ struct ClockTimerView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.leading, 9)
                         .onChange(of: focusedField) { _, newValue in
-                            if newValue == .label && timerLabel == "Timer" {
-                                timerLabel = ""
+                            if newValue == .label && timer.timerLabel == "Timer" {
+                                timer.timerLabel = ""
                             }
                         }
 
-                    // Alarm sound picker
-                    Picker("", selection: $selectedAlarmSound) {
+                    Picker("", selection: $timer.selectedAlarmSound) {
                         ForEach(alarmSounds, id: \.self) { sound in
                             Text(sound).tag(sound)
                         }
@@ -281,145 +333,38 @@ struct ClockTimerView: View {
 
             // Control Buttons (pill style)
             HStack(spacing: 20) {
-                Button(action: cancelTimer) {
+                Button(action: { timer.cancel() }) {
                     Text("Cancel")
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(timerState == .idle ? .gray : .white)
+                        .foregroundStyle(timer.timerState == .idle ? .gray : .white)
                         .frame(width: 140, height: 50)
                         .background(Color(white: 0.2))
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .disabled(timerState == .idle)
+                .disabled(timer.timerState == .idle)
 
                 Button(action: toggleTimer) {
                     Text(rightButtonLabel)
                         .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(timerState == .idle && setSeconds.wrappedValue == 0 ? .gray : rightButtonColor)
+                        .foregroundStyle(timer.timerState == .idle && timer.totalSetSeconds == 0 ? .gray : rightButtonColor)
                         .frame(width: 140, height: 50)
-                        .background(rightButtonColor.opacity(timerState == .idle && setSeconds.wrappedValue == 0 ? 0.1 : 0.3))
+                        .background(rightButtonColor.opacity(timer.timerState == .idle && timer.totalSetSeconds == 0 ? 0.1 : 0.3))
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .disabled(timerState == .idle && setSeconds.wrappedValue == 0)
+                .disabled(timer.timerState == .idle && timer.totalSetSeconds == 0)
             }
             .padding(.bottom, 40)
-
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color.black)
         .contentShape(Rectangle())
         .onTapGesture {
-            // Unfocus when tapping background
             focusedField = nil
         }
-        .onReceive(timer) { _ in
-            updateTimer()
-        }
     }
 
-    func startRecent(_ recent: RecentTimer) {
-        selectedHours = recent.hours
-        selectedMinutes = recent.minutes
-        selectedSeconds = recent.seconds
-        toggleTimer()
-    }
-
-    var rightButtonLabel: String {
-        switch timerState {
-            case .idle, .paused: return "Start"
-            case .running: return "Pause"
-        }
-    }
-
-    var rightButtonColor: Color {
-        switch timerState {
-            case .idle, .paused: return .green
-            case .running: return .orange
-        }
-    }
-
-    func toggleTimer() {
-        switch timerState {
-            case .idle:
-                totalDuration = TimeInterval(selectedHours * 3600 + selectedMinutes * 60 + selectedSeconds)
-                guard totalDuration > 0 else { return }
-                timeRemaining = totalDuration
-                endTime = Date().addingTimeInterval(totalDuration)
-                timerState = .running
-                // Auto-select smallest clockface that fits
-                selectedClockface = ClockfaceScale.allCases.last { $0.seconds >= totalDuration } ?? .hours168
-                addToRecents()
-
-            case .running:
-                timerState = .paused
-
-            case .paused:
-                endTime = Date().addingTimeInterval(timeRemaining)
-                timerState = .running
-        }
-    }
-
-    func addToRecents() {
-        let newRecent = RecentTimer(hours: selectedHours, minutes: selectedMinutes, seconds: selectedSeconds)
-        // Remove duplicate if exists
-        recentTimers.removeAll { $0.hours == newRecent.hours && $0.minutes == newRecent.minutes && $0.seconds == newRecent.seconds }
-        // Add to front
-        recentTimers.insert(newRecent, at: 0)
-        // Keep only last 5
-        if recentTimers.count > 5 {
-            recentTimers = Array(recentTimers.prefix(5))
-        }
-    }
-
-    func cancelTimer() {
-        timerState = .idle
-        timeRemaining = 0
-        endTime = nil
-    }
-
-    func updateTimer() {
-        guard timerState == .running, let end = endTime else { return }
-
-        let remaining = end.timeIntervalSinceNow
-        if remaining <= 0 {
-            timeRemaining = 0
-            timerState = .idle
-            NSSound.beep()
-        } else {
-            timeRemaining = remaining
-        }
-    }
-
-    func formatDuration(_ duration: TimeInterval) -> String {
-        let totalSeconds = Int(ceil(duration))
-        let h = totalSeconds / 3600
-        let m = (totalSeconds % 3600) / 60
-        let s = totalSeconds % 60
-
-        if h > 0 {
-            return String(format: "%d:%02d:%02d", h, m, s)
-        } else {
-            return String(format: "%02d:%02d", m, s)
-        }
-    }
-
-    func getEndTimeString() -> String {
-        guard let end = endTime else { return "" }
-        let formatter = DateFormatter()
-        formatter.dateFormat = "h:mm a"
-        return formatter.string(from: end)
-    }
-
-    func setTimeFromSeconds(_ seconds: Double) {
-        // When paused, update timeRemaining directly
-        timeRemaining = max(1, seconds)  // At least 1 second
-        // Also update the selected values for when timer is reset
-        let total = Int(seconds)
-        selectedHours = total / 3600
-        selectedMinutes = (total % 3600) / 60
-        selectedSeconds = total % 60
-    }
 }
 
 // MARK: - Time Digit Field (clickable number input)
@@ -673,31 +618,25 @@ struct AnalogTimerView: View {
 
     private var clockLabels: [Int] {
         let mins = Int(clockfaceSeconds / 60)
-        let hours = clockfaceSeconds / 3600
+        let hours = Int(clockfaceSeconds / 3600)
 
-        if hours >= 24 {
-            // Large hour scales: divide into 4 quadrants
-            let step = max(Int(hours) / 4, 1)
-            return stride(from: 0, to: Int(hours), by: step).map { $0 }
-        } else if mins == 120 {
-            // 120m: show every 10 minutes (0, 10, 20, ... 110)
-            return stride(from: 0, to: 120, by: 10).map { $0 }
-        } else if mins == 60 {
-            // 60m: show every 5 minutes
-            return stride(from: 0, to: 60, by: 5).map { $0 }
-        } else if mins == 15 {
-            // 15m: show 0, 5, 10
-            return [0, 5, 10]
-        } else if mins == 5 {
-            // 5m: show 0, 1, 2, 3, 4
-            return [0, 1, 2, 3, 4]
-        } else if hours >= 1 {
-            // Other hour scales
-            let step = max(Int(hours) / 4, 1)
-            return stride(from: 0, to: Int(hours), by: step).map { $0 }
-        } else {
-            // Other minute scales
-            let step = max(mins / 4, 1)
+        // Aim for ~12 labels with sensible divisors
+        switch hours {
+        case 168: return stride(from: 0, to: 168, by: 14).map { $0 }  // 12 labels
+        case 96: return stride(from: 0, to: 96, by: 8).map { $0 }     // 12 labels
+        case 72: return stride(from: 0, to: 72, by: 6).map { $0 }     // 12 labels
+        case 48: return stride(from: 0, to: 48, by: 4).map { $0 }     // 12 labels
+        case 24: return stride(from: 0, to: 24, by: 2).map { $0 }     // 12 labels
+        default: break
+        }
+
+        switch mins {
+        case 120: return stride(from: 0, to: 120, by: 10).map { $0 }  // 12 labels
+        case 60: return stride(from: 0, to: 60, by: 5).map { $0 }     // 12 labels
+        case 15: return stride(from: 0, to: 15, by: 5).map { $0 }     // 3 labels: 0,5,10
+        case 5: return [0, 1, 2, 3, 4]                                 // 5 labels
+        default:
+            let step = max(mins / 12, 1)
             return stride(from: 0, to: mins, by: step).map { $0 }
         }
     }
@@ -742,15 +681,33 @@ struct AnalogTimerView: View {
                     .frame(width: size - 44, height: size - 44)
                 }
 
-                // Tick marks - 60 ticks inside circle edge
-                ForEach(0..<60, id: \.self) { i in
-                    let angle = Double(i) * 6.0  // 360/60 = 6 degrees per tick
-                    let isMajor = i % 5 == 0  // Major tick every 5
+                // Tick marks - aligned with labels
+                let labelAngles = clockLabels.map { value -> Double in
+                    Double(value) / Double(maxValue) * 360.0
+                }
+                let minorTicksPerSegment = 4
+
+                ForEach(0..<labelAngles.count, id: \.self) { i in
+                    let majorAngle = labelAngles[i]
+                    let nextAngle = i < labelAngles.count - 1 ? labelAngles[i + 1] : 360.0
+                    let segmentSize = nextAngle - majorAngle
+
+                    // Major tick at label position
                     Rectangle()
                         .fill(Color.black.opacity(0.7))
-                        .frame(width: isMajor ? 2 : 1, height: isMajor ? size * 0.08 : size * 0.04)
-                        .offset(y: -(size / 2 - 32))  // Inside the circle
-                        .rotationEffect(.degrees(angle))
+                        .frame(width: 2, height: size * 0.08)
+                        .offset(y: -(size / 2 - 32))
+                        .rotationEffect(.degrees(majorAngle))
+
+                    // Minor ticks between labels
+                    ForEach(1...minorTicksPerSegment, id: \.self) { j in
+                        let minorAngle = majorAngle + (segmentSize * Double(j) / Double(minorTicksPerSegment + 1))
+                        Rectangle()
+                            .fill(Color.black.opacity(0.7))
+                            .frame(width: 1, height: size * 0.04)
+                            .offset(y: -(size / 2 - 32))
+                            .rotationEffect(.degrees(minorAngle))
+                    }
                 }
 
                 // Number labels (CCW from top) - outside the circle
