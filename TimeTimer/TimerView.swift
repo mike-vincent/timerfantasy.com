@@ -30,12 +30,11 @@ struct TimerView: View {
                     .fill(Color(white: 0.95))
                     .frame(width: size - 40, height: size - 40)
 
-                // Red pie (elapsed time - grows as time passes)
-                if totalSeconds > 0 {
-                    let elapsedSeconds = totalSeconds - remainingSeconds
+                // Red pie (remaining time - shrinks as time passes)
+                if remainingSeconds > 0 {
                     PieSlice(
                         startAngle: .degrees(-90),
-                        endAngle: .degrees(-90 + (elapsedSeconds / totalSeconds) * 360)
+                        endAngle: .degrees(-90 + (remainingSeconds / (maxMinutes * 60)) * 360)
                     )
                     .fill(Color.red.opacity(0.85))
                     .frame(width: size - 44, height: size - 44)
