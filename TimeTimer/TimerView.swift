@@ -73,6 +73,16 @@ struct TimerView: View {
                     .fill(Color.black)
                     .frame(width: 12, height: 12)
 
+                // Digital time display
+                VStack {
+                    Spacer()
+                    Text(formatTime(timerItem.remainingSeconds))
+                        .font(.system(size: size * 0.08, weight: .bold, design: .monospaced))
+                        .foregroundColor(.primary)
+                        .padding(.bottom, size * 0.12)
+                }
+                .frame(width: size - 40, height: size - 40)
+
                 // Max time picker
                 VStack {
                     Spacer()
@@ -174,6 +184,12 @@ struct TimerView: View {
         #else
         AudioServicesPlaySystemSound(1005) // System sound for iOS
         #endif
+    }
+
+    private func formatTime(_ seconds: Double) -> String {
+        let mins = Int(seconds) / 60
+        let secs = Int(seconds) % 60
+        return String(format: "%d:%02d", mins, secs)
     }
 }
 
