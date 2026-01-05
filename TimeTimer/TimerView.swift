@@ -18,18 +18,19 @@ struct TimerView: View {
             let radius = size / 2 - 20
 
             ZStack {
-                // Background circle
+                // Background circle (red = remaining time)
                 Circle()
-                    .fill(Color(white: 0.95))
+                    .fill(totalSeconds > 0 ? Color.red.opacity(0.85) : Color(white: 0.95))
                     .frame(width: size - 40, height: size - 40)
 
-                // Red pie (remaining time)
-                if remainingSeconds > 0 {
+                // Gray pie (elapsed time - grows as time passes)
+                if totalSeconds > 0 {
+                    let elapsedSeconds = totalSeconds - remainingSeconds
                     PieSlice(
                         startAngle: .degrees(-90),
-                        endAngle: .degrees(-90 + (remainingSeconds / (maxMinutes * 60)) * 360)
+                        endAngle: .degrees(-90 + (elapsedSeconds / (maxMinutes * 60)) * 360)
                     )
-                    .fill(Color.red.opacity(0.85))
+                    .fill(Color(white: 0.95))
                     .frame(width: size - 44, height: size - 44)
                 }
 
