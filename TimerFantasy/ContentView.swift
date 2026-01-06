@@ -630,12 +630,12 @@ struct TimerCardView: View {
                         .frame(width: clockSize, height: clockSize)
 
                         // Initial set time and countdown - below center dot
-                        VStack(spacing: clockSize * 0.02) {
+                        VStack(spacing: 0) {
                             Text(timer.initialTimeFormatted)
                                 .font(.system(size: clockSize * 0.07, weight: .medium))
                                 .foregroundStyle(.black.opacity(0.5))
                             Text(formatDuration(timer.timeRemaining))
-                                .font(.system(size: clockSize * 0.07, weight: .medium))
+                                .font(.system(size: clockSize * 0.07, weight: .bold))
                                 .foregroundStyle(.black)
                         }
                         .offset(y: clockSize * 0.12)
