@@ -115,61 +115,74 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            GeometryReader { geo in
-                let itemCount = timers.count + 1
+        GeometryReader { geo in
+            let itemCount = timers.count + 1
 
-                // Calculate columns and rows based on window size
-                let cols = max(1, Int((geo.size.width + spacing) / (baseCardSize + spacing)))
-                let rows = max(1, Int((geo.size.height + spacing) / (baseCardSize + spacing)))
+            // Calculate columns and rows based on window size
+            let cols = max(1, Int((geo.size.width + spacing) / (baseCardSize + spacing)))
+            let rows = max(1, Int((geo.size.height + spacing) / (baseCardSize + spacing)))
 
-                // Card size to fill available space
-                let availableWidth = geo.size.width - spacing * CGFloat(cols + 1)
-                let availableHeight = geo.size.height - spacing * CGFloat(rows + 1)
-                let cardSize = min(availableWidth / CGFloat(cols), availableHeight / CGFloat(rows))
+            // Card size to fill available space
+            let availableWidth = geo.size.width - spacing * CGFloat(cols + 1)
+            let availableHeight = geo.size.height - spacing * CGFloat(rows + 1)
+            let cardSize = min(availableWidth / CGFloat(cols), availableHeight / CGFloat(rows))
 
-                let columns = Array(repeating: GridItem(.fixed(cardSize), spacing: spacing), count: cols)
+            let columns = Array(repeating: GridItem(.fixed(cardSize), spacing: spacing), count: cols)
 
-                LazyVGrid(columns: columns, spacing: spacing) {
-                    ForEach(timers) { timer in
-                        TimerCardView(timer: timer, compact: true, size: cardSize, onDelete: {
-                            withAnimation {
-                                timers.removeAll { $0.id == timer.id }
+            let gridWidth = CGFloat(cols) * cardSize + CGFloat(cols - 1) * spacing
+            let gridHeight = CGFloat(rows) * cardSize + CGFloat(rows - 1) * spacing
+
+            // Use HStack of VStacks for explicit grid layout with centering
+            let allItems = timers.count + 1
+            let actualCols = min(cols, allItems)  // Don't show more columns than items
+            let actualRows = Int(ceil(Double(allItems) / Double(actualCols)))
+            let actualGridWidth = CGFloat(actualCols) * cardSize + CGFloat(actualCols - 1) * spacing
+            let actualGridHeight = CGFloat(actualRows) * cardSize + CGFloat(actualRows - 1) * spacing
+
+            VStack(spacing: spacing) {
+                ForEach(0..<actualRows, id: \.self) { row in
+                    HStack(spacing: spacing) {
+                        ForEach(0..<actualCols, id: \.self) { col in
+                            let index = row * actualCols + col
+                            if index < timers.count {
+                                TimerCardView(timer: timers[index], compact: true, size: cardSize, onDelete: {
+                                    withAnimation {
+                                        timers.remove(at: index)
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                        resizeWindow()
+                                    }
+                                })
+                                .frame(width: cardSize, height: cardSize)
+                            } else if index == timers.count {
+                                // Add button
+                                Button(action: {
+                                    withAnimation {
+                                        timers.append(TimerModel())
+                                    }
+                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                        resizeWindow()
+                                    }
+                                }) {
+                                    RoundedRectangle(cornerRadius: cardSize * 0.06)
+                                        .fill(Color(white: 0.1))
+                                        .overlay(
+                                            Image(systemName: "plus")
+                                                .font(.system(size: cardSize * 0.2, weight: .light))
+                                                .foregroundColor(.gray)
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                                .frame(width: cardSize, height: cardSize)
                             }
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                resizeWindow()
-                            }
-                        })
-                        .frame(width: cardSize, height: cardSize)
-                    }
-
-                    // Add new timer placeholder (always shown)
-                    Button(action: {
-                        withAnimation {
-                            timers.append(TimerModel())
                         }
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            resizeWindow()
-                        }
-                    }) {
-                        RoundedRectangle(cornerRadius: cardSize * 0.06)
-                            .fill(Color(white: 0.1))
-                            .overlay(
-                                Image(systemName: "plus")
-                                    .font(.system(size: cardSize * 0.2, weight: .light))
-                                    .foregroundColor(.gray)
-                            )
                     }
-                    .buttonStyle(.plain)
-                    .frame(width: cardSize, height: cardSize)
                 }
-                .padding(spacing)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .preferredColorScheme(.dark)
-            .toolbarBackground(.black, for: .windowToolbar)
-            .toolbarColorScheme(.dark, for: .windowToolbar)
+            .frame(width: actualGridWidth, height: actualGridHeight)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        .preferredColorScheme(.dark)
         .onReceive(globalTimer) { _ in
             for timer in timers {
                 timer.update()
@@ -298,95 +311,103 @@ struct TimerCardView: View {
         let clockSize = size * 0.5
         let digitFontSize = size * 0.16
         let countdownFontSize = size * 0.12
-        let buttonFontSize = size * 0.05
-        let buttonWidth = size * 0.175
-        let buttonHeight = size * 0.07
-        let buttonSpacing = size * 0.04
+        let buttonFontSize = size * 0.04
+        let buttonWidth = size * 0.20
+        let buttonHeight = size * 0.09
         let cornerRadius = size * 0.06
+        let padding = size * 0.04
 
-        VStack(spacing: size * 0.02) {
-            Spacer()
-
-            // Time Input Display
-            if timer.timerState == .idle {
-                // Clickable digits
-                HStack(spacing: 0) {
-                    TimeDigitField(value: $timer.selectedHours, maxValue: 168, isFocused: focusedField == .hours, size: size * 0.22)
-                        .focused($focusedField, equals: .hours)
-                    Text(":").font(.system(size: digitFontSize, weight: .thin)).foregroundStyle(.white)
-                    TimeDigitField(value: $timer.selectedMinutes, maxValue: 59, isFocused: focusedField == .minutes, size: size * 0.22)
-                        .focused($focusedField, equals: .minutes)
-                    Text(":").font(.system(size: digitFontSize, weight: .thin)).foregroundStyle(.white)
-                    TimeDigitField(value: $timer.selectedSeconds, maxValue: 59, isFocused: focusedField == .seconds, size: size * 0.22)
-                        .focused($focusedField, equals: .seconds)
-                }
-            } else {
-                // Running/Paused: show clock and countdown
-                AnalogTimerView(
-                    remainingSeconds: timer.timeRemaining,
-                    clockfaceSeconds: timer.selectedClockface.seconds,
-                    onSetTime: { seconds in
-                        if timer.timerState == .running {
-                            timer.pause()
+        ZStack {
+            // Main content centered
+            VStack(spacing: size * 0.02) {
+                if timer.timerState == .idle {
+                    // Clickable digits
+                    HStack(spacing: 0) {
+                        TimeDigitField(value: $timer.selectedHours, maxValue: 168, isFocused: focusedField == .hours, size: size * 0.22, onSubmit: { timer.start() })
+                            .focused($focusedField, equals: .hours)
+                        Text(":").font(.system(size: digitFontSize, weight: .thin)).foregroundStyle(.white)
+                        TimeDigitField(value: $timer.selectedMinutes, maxValue: 59, isFocused: focusedField == .minutes, size: size * 0.22, onSubmit: { timer.start() })
+                            .focused($focusedField, equals: .minutes)
+                        Text(":").font(.system(size: digitFontSize, weight: .thin)).foregroundStyle(.white)
+                        TimeDigitField(value: $timer.selectedSeconds, maxValue: 59, isFocused: focusedField == .seconds, size: size * 0.22, onSubmit: { timer.start() })
+                            .focused($focusedField, equals: .seconds)
+                    }
+                } else {
+                    // Running/Paused: show clock and countdown
+                    AnalogTimerView(
+                        remainingSeconds: timer.timeRemaining,
+                        clockfaceSeconds: timer.selectedClockface.seconds,
+                        onSetTime: { seconds in
+                            timer.timeRemaining = max(1, seconds)
+                            timer.endTime = Date().addingTimeInterval(seconds)
                         }
-                        setTimeFromSeconds(seconds)
-                    }
-                )
-                .frame(width: clockSize, height: clockSize)
-                .padding(.bottom, size * 0.02)
+                    )
+                    .frame(width: clockSize, height: clockSize)
 
-                Text(formatDuration(timer.timeRemaining))
-                    .font(.system(size: countdownFontSize, weight: .thin))
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
-
-                // Clockface cycle button
-                Button(action: cycleClockface) {
-                    Text(timer.selectedClockface.label)
-                        .font(.system(size: size * 0.035, weight: .medium))
+                    Text(formatDuration(timer.timeRemaining))
+                        .font(.system(size: countdownFontSize, weight: .thin))
+                        .monospacedDigit()
                         .foregroundStyle(.white)
-                        .padding(.horizontal, size * 0.025)
-                        .padding(.vertical, size * 0.01)
-                        .background(Color.gray.opacity(0.3))
-                        .clipShape(Capsule())
                 }
-                .buttonStyle(.plain)
-                .padding(.top, size * 0.01)
             }
 
-            Spacer()
-
-            // Control Buttons (pill style)
-            HStack(spacing: buttonSpacing) {
-                Button(action: {
-                    if timer.timerState == .idle {
-                        onDelete?()
-                    } else {
-                        timer.cancel()
+            // Clockface toggle - top right (only when running/paused)
+            if timer.timerState != .idle {
+                VStack {
+                    HStack {
+                        Spacer()
+                        Button(action: cycleClockface) {
+                            Text(timer.selectedClockface.label)
+                                .font(.system(size: size * 0.035, weight: .medium))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, size * 0.04)
+                                .padding(.vertical, size * 0.02)
+                                .background(Color.gray.opacity(0.3))
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
                     }
-                }) {
-                    Text(timer.timerState == .idle ? "Delete" : "Cancel")
-                        .font(.system(size: buttonFontSize, weight: .medium))
-                        .foregroundStyle(timer.timerState == .idle && onDelete == nil ? .gray : .white)
-                        .frame(width: buttonWidth, height: buttonHeight)
-                        .background(Color(white: 0.2))
-                        .clipShape(Capsule())
+                    Spacer()
                 }
-                .buttonStyle(.plain)
-                .disabled(timer.timerState == .idle && onDelete == nil)
-
-                Button(action: toggleTimer) {
-                    Text(rightButtonLabel)
-                        .font(.system(size: buttonFontSize, weight: .medium))
-                        .foregroundStyle(timer.timerState == .idle && timer.totalSetSeconds == 0 ? .gray : rightButtonColor)
-                        .frame(width: buttonWidth, height: buttonHeight)
-                        .background(rightButtonColor.opacity(timer.timerState == .idle && timer.totalSetSeconds == 0 ? 0.1 : 0.3))
-                        .clipShape(Capsule())
-                }
-                .buttonStyle(.plain)
-                .disabled(timer.timerState == .idle && timer.totalSetSeconds == 0)
+                .padding(padding)
             }
-            .padding(.bottom, size * 0.06)
+
+            // Bottom buttons - Delete/Cancel left, Start/Pause right
+            VStack {
+                Spacer()
+                HStack {
+                    Button(action: {
+                        if timer.timerState == .idle {
+                            onDelete?()
+                        } else {
+                            timer.cancel()
+                        }
+                    }) {
+                        Text(timer.timerState == .idle ? "Delete" : "Cancel")
+                            .font(.system(size: buttonFontSize, weight: .medium))
+                            .foregroundStyle(timer.timerState == .idle && onDelete == nil ? .gray : .white)
+                            .frame(width: buttonWidth, height: buttonHeight)
+                            .background(Color(white: 0.2))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(timer.timerState == .idle && onDelete == nil)
+
+                    Spacer()
+
+                    Button(action: toggleTimer) {
+                        Text(rightButtonLabel)
+                            .font(.system(size: buttonFontSize, weight: .medium))
+                            .foregroundStyle(timer.timerState == .idle && timer.totalSetSeconds == 0 ? .gray : rightButtonColor)
+                            .frame(width: buttonWidth, height: buttonHeight)
+                            .background(rightButtonColor.opacity(timer.timerState == .idle && timer.totalSetSeconds == 0 ? 0.1 : 0.3))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(timer.timerState == .idle && timer.totalSetSeconds == 0)
+                }
+            }
+            .padding(padding)
         }
         .frame(width: size, height: size)
         .background(Color(white: 0.1))
@@ -394,6 +415,9 @@ struct TimerCardView: View {
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture {
+            focusedField = nil
+        }
+        .onAppear {
             focusedField = nil
         }
     }
@@ -406,6 +430,7 @@ struct TimeDigitField: View {
     let maxValue: Int
     let isFocused: Bool
     var size: CGFloat = 110  // Field size for proportional scaling
+    var onSubmit: (() -> Void)? = nil
     @State private var textValue: String = ""
     @State private var isEditing: Bool = false
     @State private var hasTyped: Bool = false
@@ -428,6 +453,16 @@ struct TimeDigitField: View {
                 .frame(width: fieldWidth, height: fieldHeight)
                 .textFieldStyle(.plain)
                 .tint(.clear)
+                .focusEffectDisabled()
+                .onSubmit {
+                    onSubmit?()
+                }
+                .onAppear {
+                    // Delay to prevent auto-focus on first field
+                    DispatchQueue.main.async {
+                        NSApp.keyWindow?.makeFirstResponder(nil)
+                    }
+                }
                 .onChange(of: textValue) { oldValue, newValue in
                     // Filter to only digits
                     var filtered = newValue.filter { $0.isNumber }
@@ -707,19 +742,7 @@ struct AnalogTimerView: View {
                     .fill(Color.white)
                     .frame(width: size * 0.65, height: size * 0.65)
 
-                // Red pie (remaining time) - shrinks CW from 12 o'clock
-                if remainingSeconds > 0 {
-                    let angle = (remainingSeconds / clockMaxSeconds) * 360
-                    PieSlice(
-                        startAngle: .degrees(-90),
-                        endAngle: .degrees(-90 - angle),
-                        clockwise: true
-                    )
-                    .fill(Color.red)
-                    .frame(width: size * 0.63, height: size * 0.63)
-                }
-
-                // Tick marks - aligned with labels
+                // Tick marks - aligned with labels (drawn before red so they're underneath)
                 let labelAngles = clockLabels.map { value -> Double in
                     Double(value) / Double(maxValue) * 360.0
                 }
@@ -746,6 +769,18 @@ struct AnalogTimerView: View {
                             .offset(y: -(size * 0.30))
                             .rotationEffect(.degrees(minorAngle))
                     }
+                }
+
+                // Red pie (remaining time) - shrinks CW from 12 o'clock (on top of ticks)
+                if remainingSeconds > 0 {
+                    let angle = (remainingSeconds / clockMaxSeconds) * 360
+                    PieSlice(
+                        startAngle: .degrees(-90),
+                        endAngle: .degrees(-90 - angle),
+                        clockwise: true
+                    )
+                    .fill(Color.red)
+                    .frame(width: size * 0.63, height: size * 0.63)
                 }
 
                 // Number labels (CCW from top) - outside the clock
