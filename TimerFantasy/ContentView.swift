@@ -242,7 +242,7 @@ class TimerModel: ObservableObject, Identifiable {
 
 // MARK: - Clockface Scale (top level)
 enum ClockfaceScale: String, CaseIterable {
-    case hours96, hours72, hours48, hours24, hours16, hours12, hours8, hours4, minutes120, minutes60, minutes30, minutes15, minutes9, minutes5, seconds60
+    case hours96, hours72, hours48, hours24, hours16, hours12, hours8, hours4, minutes120, minutes90, minutes60, minutes30, minutes15, minutes9, minutes5, seconds60
 
     var seconds: Double {
         switch self {
@@ -255,6 +255,7 @@ enum ClockfaceScale: String, CaseIterable {
         case .hours8: return 8 * 3600
         case .hours4: return 4 * 3600
         case .minutes120: return 120 * 60
+        case .minutes90: return 90 * 60
         case .minutes60: return 60 * 60
         case .minutes30: return 30 * 60
         case .minutes15: return 15 * 60
@@ -275,6 +276,7 @@ enum ClockfaceScale: String, CaseIterable {
         case .hours8: return "8h"
         case .hours4: return "4h"
         case .minutes120: return "120m"
+        case .minutes90: return "90m"
         case .minutes60: return "60m"
         case .minutes30: return "30m"
         case .minutes15: return "15m"
@@ -1052,6 +1054,7 @@ struct AnalogTimerView: View {
 
         switch mins {
         case 120: return stride(from: 0, to: 120, by: 10).map { $0 }  // 12 labels
+        case 90: return stride(from: 0, to: 90, by: 15).map { $0 }    // 0, 15, 30, 45, 60, 75 (6 labels)
         case 60: return stride(from: 0, to: 60, by: 5).map { $0 }     // 12 labels
         case 30: return stride(from: 0, to: 30, by: 5).map { $0 }     // 0, 5, 10, 15, 20, 25 (6 labels)
         case 15: return stride(from: 0, to: 15, by: 3).map { $0 }     // 0, 3, 6, 9, 12 (5 labels)
@@ -1081,7 +1084,7 @@ struct AnalogTimerView: View {
         // For sub-minute scales, use 60 seconds
         if secs <= 60 { return 60 }
         // For specific minute scales, use actual minutes
-        if mins == 5 || mins == 9 || mins == 15 || mins == 30 { return mins }
+        if mins == 5 || mins == 9 || mins == 15 || mins == 30 || mins == 90 { return mins }
         // For 60 mins, use 60
         if mins <= 60 { return 60 }
         // For 120 mins
