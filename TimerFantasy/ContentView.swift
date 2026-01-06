@@ -208,6 +208,12 @@ class TimerModel: ObservableObject, Identifiable {
     }
 
     func playAlarmSound() {
+        // Skip if No Sound selected
+        if selectedAlarmSound == "No Sound" {
+            isAlarmRinging = false
+            return
+        }
+
         // Extract sound name without "(Default)" suffix
         let soundName = selectedAlarmSound.replacingOccurrences(of: " (Default)", with: "")
         isAlarmRinging = true
@@ -436,13 +442,13 @@ struct TimerCardView: View {
     private var scale: CGFloat { size / 200 }  // Base size is 200
 
     let alarmSounds = [
-        "Glass (Default)", "Basso", "Blow", "Bottle", "Frog", "Funk",
+        "No Sound", "Glass (Default)", "Basso", "Blow", "Bottle", "Frog", "Funk",
         "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"
     ]
 
     var availableClockfaces: [ClockfaceScale] {
-        // Only allow clockfaces that fit the initial set time (not larger)
-        ClockfaceScale.allCases.filter { $0.seconds >= timer.initialSetSeconds }
+        // Allow clockfaces that fit the remaining time (so you can zoom in as timer counts down)
+        ClockfaceScale.allCases.filter { $0.seconds >= timer.timeRemaining }
     }
 
     func cycleClockface() {
@@ -459,6 +465,7 @@ struct TimerCardView: View {
     @FocusState private var focusedField: TimeField?
     @State private var showDeleteConfirmation = false
     @State private var showCancelConfirmation = false
+    @State private var labelBeforeEdit: String = ""
 
     enum TimeField: Hashable {
         case hours, minutes, seconds, label
@@ -538,14 +545,14 @@ struct TimerCardView: View {
                             .foregroundStyle(.white)
                             .frame(width: size * 0.05)
                             .transition(.opacity.combined(with: .scale))
-                        TimeDigitField(value: $timer.selectedMinutes, maxValue: 59, isFocused: focusedField == .minutes, size: size * 0.22, onSubmit: { timer.start() })
+                        TimeDigitField(value: $timer.selectedMinutes, maxValue: 99, isFocused: focusedField == .minutes, size: size * 0.22, onSubmit: { timer.start() })
                             .focused($focusedField, equals: .minutes)
                         Text(":")
                             .font(.system(size: digitFontSize, weight: .thin))
                             .foregroundStyle(.white)
                             .frame(width: size * 0.05)
                             .transition(.opacity.combined(with: .scale))
-                        TimeDigitField(value: $timer.selectedSeconds, maxValue: 59, isFocused: focusedField == .seconds, size: size * 0.22, onSubmit: { timer.start() })
+                        TimeDigitField(value: $timer.selectedSeconds, maxValue: 99, isFocused: focusedField == .seconds, size: size * 0.22, onSubmit: { timer.start() })
                             .focused($focusedField, equals: .seconds)
                     }
 
@@ -612,6 +619,27 @@ struct TimerCardView: View {
                                 .font(.system(size: size * 0.035, weight: .medium))
                         }
                         .foregroundStyle(.white.opacity(0.5))
+
+                        // Repeat button
+                        Button(action: {
+                            timer.dismissAlarm()
+                            timer.timeRemaining = timer.initialSetSeconds
+                            timer.endTime = Date().addingTimeInterval(timer.initialSetSeconds)
+                            timer.timerState = .running
+                        }) {
+                            HStack(spacing: size * 0.01) {
+                                Image(systemName: "repeat")
+                                    .font(.system(size: size * 0.03))
+                                Text("Repeat")
+                                    .font(.system(size: size * 0.04, weight: .medium))
+                            }
+                            .foregroundStyle(.orange)
+                            .padding(.horizontal, size * 0.04)
+                            .padding(.vertical, size * 0.02)
+                            .background(Color.orange.opacity(0.2))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
                     }
                     .onTapGesture {
                         timer.dismissAlarm()
@@ -640,14 +668,58 @@ struct TimerCardView: View {
                         }
                         .offset(y: clockSize * 0.12)
 
-                        // End time with bell icon - hung below clock
-                        HStack(spacing: size * 0.01) {
-                            Image(systemName: "bell.fill")
-                                .font(.system(size: size * 0.025))
-                            Text(getEndTimeString())
+                        // End time with bell icon and label - hung below clock
+                        VStack(spacing: size * 0.01) {
+                            Menu {
+                                Menu("Sound: \(timer.selectedAlarmSound)") {
+                                    ForEach(alarmSounds, id: \.self) { sound in
+                                        Button(sound) {
+                                            timer.selectedAlarmSound = sound
+                                            if sound != "No Sound" {
+                                                let soundName = sound.replacingOccurrences(of: " (Default)", with: "")
+                                                if let s = NSSound(named: NSSound.Name(soundName)) {
+                                                    s.play()
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                Menu("Duration: \(timer.alarmDuration)s") {
+                                    ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
+                                        Button("\(seconds)s") {
+                                            timer.alarmDuration = seconds
+                                        }
+                                    }
+                                }
+                            } label: {
+                                HStack(spacing: size * 0.01) {
+                                    Image(systemName: timer.selectedAlarmSound == "No Sound" ? "bell.slash.fill" : "bell.fill")
+                                        .font(.system(size: size * 0.025))
+                                    Text(getEndTimeString())
+                                        .font(.system(size: size * 0.035, weight: .medium))
+                                }
+                                .foregroundStyle(.white.opacity(0.5))
+                            }
+                            .menuStyle(.borderlessButton)
+
+                            TextField("", text: $timer.timerLabel)
                                 .font(.system(size: size * 0.035, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.7))
+                                .multilineTextAlignment(.center)
+                                .textFieldStyle(.plain)
+                                .frame(width: size * 0.5)
+                                .focusEffectDisabled()
+                                .tint(.white)
+                                .focused($focusedField, equals: .label)
+                                .onChange(of: focusedField) { _, newValue in
+                                    if newValue == .label {
+                                        labelBeforeEdit = timer.timerLabel
+                                        timer.timerLabel = ""
+                                    } else if newValue != .label && timer.timerLabel.isEmpty {
+                                        timer.timerLabel = labelBeforeEdit.isEmpty ? "Timer" : labelBeforeEdit
+                                    }
+                                }
                         }
-                        .foregroundStyle(.white.opacity(0.5))
                         .offset(y: clockSize * 0.58)
                     }
                 }
