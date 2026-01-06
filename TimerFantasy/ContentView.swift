@@ -22,7 +22,7 @@ struct TimerData: Codable, Identifiable {
 // MARK: - Timer Store (iCloud + UserDefaults persistence)
 class TimerStore: ObservableObject {
     static let shared = TimerStore()
-    private let iCloudKey = "com.timerfantasy.timers"
+    private let iCloudKey = "com.timerfantasy.app.timers"
     private let userDefaultsKey = "TimerFantasyData"
 
     private init() {
@@ -242,7 +242,7 @@ class TimerModel: ObservableObject, Identifiable {
 
 // MARK: - Clockface Scale (top level)
 enum ClockfaceScale: String, CaseIterable {
-    case hours96, hours72, hours48, hours24, minutes120, minutes60, minutes15, minutes9, minutes5, seconds60
+    case hours96, hours72, hours48, hours24, hours16, hours12, hours8, hours4, minutes120, minutes60, minutes30, minutes15, minutes9, minutes5, seconds60
 
     var seconds: Double {
         switch self {
@@ -250,8 +250,13 @@ enum ClockfaceScale: String, CaseIterable {
         case .hours72: return 72 * 3600
         case .hours48: return 48 * 3600
         case .hours24: return 24 * 3600
+        case .hours16: return 16 * 3600
+        case .hours12: return 12 * 3600
+        case .hours8: return 8 * 3600
+        case .hours4: return 4 * 3600
         case .minutes120: return 120 * 60
         case .minutes60: return 60 * 60
+        case .minutes30: return 30 * 60
         case .minutes15: return 15 * 60
         case .minutes9: return 9 * 60
         case .minutes5: return 5 * 60
@@ -265,8 +270,13 @@ enum ClockfaceScale: String, CaseIterable {
         case .hours72: return "72h"
         case .hours48: return "48h"
         case .hours24: return "24h"
+        case .hours16: return "16h"
+        case .hours12: return "12h"
+        case .hours8: return "8h"
+        case .hours4: return "4h"
         case .minutes120: return "120m"
         case .minutes60: return "60m"
+        case .minutes30: return "30m"
         case .minutes15: return "15m"
         case .minutes9: return "9m"
         case .minutes5: return "5m"
@@ -462,7 +472,7 @@ struct TimerCardView: View {
 
     var rightButtonColor: Color {
         switch timer.timerState {
-        case .idle, .paused: return .green
+        case .idle, .paused: return .blue
         case .running, .alarming: return .orange
         }
     }
@@ -1026,6 +1036,10 @@ struct AnalogTimerView: View {
         case 72: return stride(from: 0, to: 72, by: 6).map { $0 }     // 12 labels
         case 48: return stride(from: 0, to: 48, by: 4).map { $0 }     // 12 labels
         case 24: return stride(from: 0, to: 24, by: 2).map { $0 }     // 12 labels
+        case 16: return stride(from: 0, to: 16, by: 2).map { $0 }     // 8 labels
+        case 12: return stride(from: 0, to: 12, by: 1).map { $0 }     // 12 labels (standard clock)
+        case 8: return stride(from: 0, to: 8, by: 1).map { $0 }       // 8 labels
+        case 4: return stride(from: 0, to: 4, by: 1).map { $0 }       // 4 labels
         default: break
         }
 
@@ -1038,9 +1052,11 @@ struct AnalogTimerView: View {
 
         switch mins {
         case 120: return stride(from: 0, to: 120, by: 10).map { $0 }  // 12 labels
-        case 1...60:
-            // Use 60-minute clock face for all sub-hour scales (1m, 5m, 6m, 9m, 15m, 60m)
-            return stride(from: 0, to: 60, by: 5).map { $0 }  // 0, 5, 10, 15...55
+        case 60: return stride(from: 0, to: 60, by: 5).map { $0 }     // 12 labels
+        case 30: return stride(from: 0, to: 30, by: 5).map { $0 }     // 0, 5, 10, 15, 20, 25 (6 labels)
+        case 15: return stride(from: 0, to: 15, by: 3).map { $0 }     // 0, 3, 6, 9, 12 (5 labels)
+        case 9: return stride(from: 0, to: 9, by: 1).map { $0 }       // 0-8 (9 labels)
+        case 5: return stride(from: 0, to: 5, by: 1).map { $0 }       // 0-4 (5 labels)
         default:
             let step = max(mins / 12, 1)
             return stride(from: 0, to: mins, by: step).map { $0 }
@@ -1064,7 +1080,9 @@ struct AnalogTimerView: View {
         if hours > 2 { return Int(hours) }
         // For sub-minute scales, use 60 seconds
         if secs <= 60 { return 60 }
-        // For sub-hour scales (1-60 mins), use 60 minutes
+        // For specific minute scales, use actual minutes
+        if mins == 5 || mins == 9 || mins == 15 || mins == 30 { return mins }
+        // For 60 mins, use 60
         if mins <= 60 { return 60 }
         // For 120 mins
         return mins
