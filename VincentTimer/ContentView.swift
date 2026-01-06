@@ -93,25 +93,80 @@ struct ContentView: View {
     @State private var timers: [TimerModel] = [TimerModel()]
     let globalTimer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
 
+    private let spacing: CGFloat = 8
+    private let columnCount = 2
+    private let baseCardSize: CGFloat = 200
+
+    private var rowCount: Int {
+        Int(ceil(Double(timers.count + 1) / Double(columnCount)))
+    }
+
+    private func resizeWindow() {
+        guard let window = NSApplication.shared.windows.first else { return }
+        let newWidth = CGFloat(columnCount) * baseCardSize + spacing * CGFloat(columnCount + 1)
+        let newHeight = CGFloat(rowCount) * baseCardSize + spacing * CGFloat(rowCount + 1) + 28 // 28 for title bar
+
+        var frame = window.frame
+        let oldHeight = frame.height
+        frame.size = NSSize(width: newWidth, height: newHeight)
+        // Keep top-left corner in place
+        frame.origin.y += oldHeight - newHeight
+        window.setFrame(frame, display: true, animate: true)
+    }
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                LazyVStack(spacing: 0) {
+            GeometryReader { geo in
+                let itemCount = timers.count + 1
+
+                // Calculate columns and rows based on window size
+                let cols = max(1, Int((geo.size.width + spacing) / (baseCardSize + spacing)))
+                let rows = max(1, Int((geo.size.height + spacing) / (baseCardSize + spacing)))
+
+                // Card size to fill available space
+                let availableWidth = geo.size.width - spacing * CGFloat(cols + 1)
+                let availableHeight = geo.size.height - spacing * CGFloat(rows + 1)
+                let cardSize = min(availableWidth / CGFloat(cols), availableHeight / CGFloat(rows))
+
+                let columns = Array(repeating: GridItem(.fixed(cardSize), spacing: spacing), count: cols)
+
+                LazyVGrid(columns: columns, spacing: spacing) {
                     ForEach(timers) { timer in
-                        ClockTimerView(timer: timer)
+                        TimerCardView(timer: timer, compact: true, size: cardSize, onDelete: {
+                            withAnimation {
+                                timers.removeAll { $0.id == timer.id }
+                            }
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                                resizeWindow()
+                            }
+                        })
+                        .frame(width: cardSize, height: cardSize)
                     }
+
+                    // Add new timer placeholder (always shown)
+                    Button(action: {
+                        withAnimation {
+                            timers.append(TimerModel())
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            resizeWindow()
+                        }
+                    }) {
+                        RoundedRectangle(cornerRadius: cardSize * 0.06)
+                            .fill(Color(white: 0.1))
+                            .overlay(
+                                Image(systemName: "plus")
+                                    .font(.system(size: cardSize * 0.2, weight: .light))
+                                    .foregroundColor(.gray)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .frame(width: cardSize, height: cardSize)
                 }
+                .padding(spacing)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
             .preferredColorScheme(.dark)
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: {
-                        timers.insert(TimerModel(), at: 0)
-                    }) {
-                        Image(systemName: "plus")
-                    }
-                }
-            }
             .toolbarBackground(.black, for: .windowToolbar)
             .toolbarColorScheme(.dark, for: .windowToolbar)
         }
@@ -151,9 +206,14 @@ struct RecentTimer: Identifiable, Equatable {
     }
 }
 
-// MARK: - Timer View
-struct ClockTimerView: View {
+// MARK: - Timer Card View
+struct TimerCardView: View {
     @ObservedObject var timer: TimerModel
+    var compact: Bool = false
+    var size: CGFloat = 200  // Card size for proportional scaling
+    var onDelete: (() -> Void)? = nil
+
+    private var scale: CGFloat { size / 200 }  // Base size is 200
 
     let alarmSounds = [
         "Radial (Default)", "Arpeggio", "Breaking", "Canopy", "Chalet",
@@ -235,30 +295,29 @@ struct ClockTimerView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        let clockSize = size * 0.5
+        let digitFontSize = size * 0.16
+        let countdownFontSize = size * 0.12
+        let buttonFontSize = size * 0.05
+        let buttonWidth = size * 0.175
+        let buttonHeight = size * 0.07
+        let buttonSpacing = size * 0.04
+        let cornerRadius = size * 0.06
+
+        VStack(spacing: size * 0.02) {
             Spacer()
 
             // Time Input Display
             if timer.timerState == .idle {
-                // Labels row
-                HStack(spacing: 0) {
-                    Text("hr").frame(width: 120)
-                    Text("min").frame(width: 120)
-                    Text("sec").frame(width: 120)
-                }
-                .font(.system(size: 16, weight: .regular))
-                .foregroundStyle(.gray)
-                .padding(.bottom, 8)
-
                 // Clickable digits
                 HStack(spacing: 0) {
-                    TimeDigitField(value: $timer.selectedHours, maxValue: 168, isFocused: focusedField == .hours)
+                    TimeDigitField(value: $timer.selectedHours, maxValue: 168, isFocused: focusedField == .hours, size: size * 0.22)
                         .focused($focusedField, equals: .hours)
-                    Text(":").font(.system(size: 80, weight: .thin)).foregroundStyle(.white)
-                    TimeDigitField(value: $timer.selectedMinutes, maxValue: 59, isFocused: focusedField == .minutes)
+                    Text(":").font(.system(size: digitFontSize, weight: .thin)).foregroundStyle(.white)
+                    TimeDigitField(value: $timer.selectedMinutes, maxValue: 59, isFocused: focusedField == .minutes, size: size * 0.22)
                         .focused($focusedField, equals: .minutes)
-                    Text(":").font(.system(size: 80, weight: .thin)).foregroundStyle(.white)
-                    TimeDigitField(value: $timer.selectedSeconds, maxValue: 59, isFocused: focusedField == .seconds)
+                    Text(":").font(.system(size: digitFontSize, weight: .thin)).foregroundStyle(.white)
+                    TimeDigitField(value: $timer.selectedSeconds, maxValue: 59, isFocused: focusedField == .seconds, size: size * 0.22)
                         .focused($focusedField, equals: .seconds)
                 }
             } else {
@@ -266,99 +325,73 @@ struct ClockTimerView: View {
                 AnalogTimerView(
                     remainingSeconds: timer.timeRemaining,
                     clockfaceSeconds: timer.selectedClockface.seconds,
-                    onSetTime: timer.timerState == .paused ? { setTimeFromSeconds($0) } : nil
+                    onSetTime: { seconds in
+                        if timer.timerState == .running {
+                            timer.pause()
+                        }
+                        setTimeFromSeconds(seconds)
+                    }
                 )
-                .frame(width: 220, height: 220)
-                .padding(.bottom, 20)
+                .frame(width: clockSize, height: clockSize)
+                .padding(.bottom, size * 0.02)
 
                 Text(formatDuration(timer.timeRemaining))
-                    .font(.system(size: 60, weight: .thin))
+                    .font(.system(size: countdownFontSize, weight: .thin))
                     .monospacedDigit()
                     .foregroundStyle(.white)
-
-                if timer.endTime != nil {
-                    HStack(spacing: 4) {
-                        Image(systemName: "bell.fill").font(.caption)
-                        Text(getEndTimeString()).font(.subheadline)
-                    }
-                    .foregroundStyle(.gray)
-                    .padding(.top, 8)
-                }
 
                 // Clockface cycle button
                 Button(action: cycleClockface) {
                     Text(timer.selectedClockface.label)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: size * 0.035, weight: .medium))
                         .foregroundStyle(.white)
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, size * 0.025)
+                        .padding(.vertical, size * 0.01)
                         .background(Color.gray.opacity(0.3))
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .padding(.top, 12)
-            }
-
-            // Timer label and options (only when idle)
-            if timer.timerState == .idle {
-                VStack(alignment: .leading, spacing: 8) {
-                    TextField("Timer", text: $timer.timerLabel)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 13))
-                        .foregroundStyle(.white)
-                        .focused($focusedField, equals: .label)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading, 9)
-                        .onChange(of: focusedField) { _, newValue in
-                            if newValue == .label && timer.timerLabel == "Timer" {
-                                timer.timerLabel = ""
-                            }
-                        }
-
-                    Picker("", selection: $timer.selectedAlarmSound) {
-                        ForEach(alarmSounds, id: \.self) { sound in
-                            Text(sound).tag(sound)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .fixedSize(horizontal: true, vertical: false)
-                .padding(.top, 30)
-                .padding(.bottom, 40)
+                .padding(.top, size * 0.01)
             }
 
             Spacer()
 
             // Control Buttons (pill style)
-            HStack(spacing: 20) {
-                Button(action: { timer.cancel() }) {
-                    Text("Cancel")
-                        .font(.system(size: 18, weight: .medium))
-                        .foregroundStyle(timer.timerState == .idle ? .gray : .white)
-                        .frame(width: 140, height: 50)
+            HStack(spacing: buttonSpacing) {
+                Button(action: {
+                    if timer.timerState == .idle {
+                        onDelete?()
+                    } else {
+                        timer.cancel()
+                    }
+                }) {
+                    Text(timer.timerState == .idle ? "Delete" : "Cancel")
+                        .font(.system(size: buttonFontSize, weight: .medium))
+                        .foregroundStyle(timer.timerState == .idle && onDelete == nil ? .gray : .white)
+                        .frame(width: buttonWidth, height: buttonHeight)
                         .background(Color(white: 0.2))
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .disabled(timer.timerState == .idle)
+                .disabled(timer.timerState == .idle && onDelete == nil)
 
                 Button(action: toggleTimer) {
                     Text(rightButtonLabel)
-                        .font(.system(size: 18, weight: .medium))
+                        .font(.system(size: buttonFontSize, weight: .medium))
                         .foregroundStyle(timer.timerState == .idle && timer.totalSetSeconds == 0 ? .gray : rightButtonColor)
-                        .frame(width: 140, height: 50)
+                        .frame(width: buttonWidth, height: buttonHeight)
                         .background(rightButtonColor.opacity(timer.timerState == .idle && timer.totalSetSeconds == 0 ? 0.1 : 0.3))
                         .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
                 .disabled(timer.timerState == .idle && timer.totalSetSeconds == 0)
             }
-            .padding(.bottom, 40)
+            .padding(.bottom, size * 0.06)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.black)
+        .frame(width: size, height: size)
+        .background(Color(white: 0.1))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        .clipped()
         .contentShape(Rectangle())
         .onTapGesture {
             focusedField = nil
@@ -372,22 +405,27 @@ struct TimeDigitField: View {
     @Binding var value: Int
     let maxValue: Int
     let isFocused: Bool
+    var size: CGFloat = 110  // Field size for proportional scaling
     @State private var textValue: String = ""
     @State private var isEditing: Bool = false
     @State private var hasTyped: Bool = false
 
     var body: some View {
+        let fieldWidth: CGFloat = size
+        let fieldHeight: CGFloat = size * 0.9
+        let fontSize: CGFloat = size * 0.72
+
         ZStack {
             // Background - always present, orange when focused
-            RoundedRectangle(cornerRadius: 8)
+            RoundedRectangle(cornerRadius: size * 0.07)
                 .fill(isFocused ? Color.orange : Color.clear)
-                .frame(width: 110, height: 100)
+                .frame(width: fieldWidth, height: fieldHeight)
 
             TextField("", text: $textValue)
-                .font(.system(size: 80, weight: .thin))
+                .font(.system(size: fontSize, weight: .thin))
                 .foregroundStyle(.white)
                 .multilineTextAlignment(.center)
-                .frame(width: 110, height: 100)
+                .frame(width: fieldWidth, height: fieldHeight)
                 .textFieldStyle(.plain)
                 .tint(.clear)
                 .onChange(of: textValue) { oldValue, newValue in
@@ -664,10 +702,10 @@ struct AnalogTimerView: View {
             let degreesPerTick = 360.0 / Double(tickCount)
 
             ZStack {
-                // Background circle (white)
+                // Background circle (white) - smaller to leave room for labels outside
                 Circle()
                     .fill(Color.white)
-                    .frame(width: size - 40, height: size - 40)
+                    .frame(width: size * 0.65, height: size * 0.65)
 
                 // Red pie (remaining time) - shrinks CW from 12 o'clock
                 if remainingSeconds > 0 {
@@ -678,7 +716,7 @@ struct AnalogTimerView: View {
                         clockwise: true
                     )
                     .fill(Color.red)
-                    .frame(width: size - 44, height: size - 44)
+                    .frame(width: size * 0.63, height: size * 0.63)
                 }
 
                 // Tick marks - aligned with labels
@@ -692,11 +730,11 @@ struct AnalogTimerView: View {
                     let nextAngle = i < labelAngles.count - 1 ? labelAngles[i + 1] : 360.0
                     let segmentSize = nextAngle - majorAngle
 
-                    // Major tick at label position
+                    // Major tick at label position (on clock edge)
                     Rectangle()
                         .fill(Color.black.opacity(0.7))
-                        .frame(width: 2, height: size * 0.08)
-                        .offset(y: -(size / 2 - 32))
+                        .frame(width: size * 0.015, height: size * 0.06)
+                        .offset(y: -(size * 0.29))
                         .rotationEffect(.degrees(majorAngle))
 
                     // Minor ticks between labels
@@ -704,21 +742,21 @@ struct AnalogTimerView: View {
                         let minorAngle = majorAngle + (segmentSize * Double(j) / Double(minorTicksPerSegment + 1))
                         Rectangle()
                             .fill(Color.black.opacity(0.7))
-                            .frame(width: 1, height: size * 0.04)
-                            .offset(y: -(size / 2 - 32))
+                            .frame(width: size * 0.008, height: size * 0.03)
+                            .offset(y: -(size * 0.30))
                             .rotationEffect(.degrees(minorAngle))
                     }
                 }
 
-                // Number labels (CCW from top) - outside the circle
+                // Number labels (CCW from top) - outside the clock
                 ForEach(clockLabels, id: \.self) { value in
                     let position = Double(value) / Double(maxValue)
                     let angle = -position * 360.0 - 90  // CCW
-                    let radius = (size / 2) + 12  // Outside the circle
+                    let radius = size * 0.42  // Outside the clock edge
                     let x = radius * cos(angle * .pi / 180)
                     let y = radius * sin(angle * .pi / 180)
                     Text("\(value)")
-                        .font(.system(size: 12, weight: .bold))
+                        .font(.system(size: size * 0.08, weight: .bold))
                         .foregroundColor(.white)
                         .position(x: size/2 + x, y: size/2 + y)
                 }
