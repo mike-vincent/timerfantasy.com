@@ -166,7 +166,7 @@ class TimerModel: ObservableObject, Identifiable {
         timeRemaining = totalSetSeconds
         endTime = Date().addingTimeInterval(totalSetSeconds)
         timerState = .running
-        selectedClockface = ClockfaceScale.allCases.last { $0.seconds >= totalSetSeconds } ?? .hours168
+        selectedClockface = ClockfaceScale.allCases.last { $0.seconds >= totalSetSeconds } ?? .hours96
     }
 
     func pause() { timerState = .paused }
@@ -231,11 +231,10 @@ class TimerModel: ObservableObject, Identifiable {
 
 // MARK: - Clockface Scale (top level)
 enum ClockfaceScale: String, CaseIterable {
-    case hours168, hours96, hours72, hours48, hours24, minutes120, minutes60, minutes15, minutes5
+    case hours96, hours72, hours48, hours24, minutes120, minutes60, minutes15, minutes5
 
     var seconds: Double {
         switch self {
-        case .hours168: return 168 * 3600
         case .hours96: return 96 * 3600
         case .hours72: return 72 * 3600
         case .hours48: return 48 * 3600
@@ -249,15 +248,14 @@ enum ClockfaceScale: String, CaseIterable {
 
     var label: String {
         switch self {
-        case .hours168: return "168 hr"
-        case .hours96: return "96 hr"
-        case .hours72: return "72 hr"
-        case .hours48: return "48 hr"
-        case .hours24: return "24 hr"
-        case .minutes120: return "120 min"
-        case .minutes60: return "60 min"
-        case .minutes15: return "15 min"
-        case .minutes5: return "5 min"
+        case .hours96: return "96h"
+        case .hours72: return "72h"
+        case .hours48: return "48h"
+        case .hours24: return "24h"
+        case .minutes120: return "120m"
+        case .minutes60: return "60m"
+        case .minutes15: return "15m"
+        case .minutes5: return "5m"
         }
     }
 }
@@ -273,7 +271,7 @@ struct ContentView: View {
     private let baseCardSize: CGFloat = 200
 
     private var rowCount: Int {
-        Int(ceil(Double(timers.count + 1) / Double(columnCount)))
+        Int(ceil(Double(max(1, timers.count)) / Double(columnCount)))
     }
 
     private func saveTimers() {
@@ -308,7 +306,7 @@ struct ContentView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let allItems = timers.count + 1
+            let allItems = max(1, timers.count)
             let windowRatio = geo.size.width / geo.size.height
             let layout = bestGridLayout(itemCount: allItems, windowRatio: windowRatio)
             let actualCols = layout.cols
@@ -328,32 +326,19 @@ struct ContentView: View {
                         ForEach(0..<actualCols, id: \.self) { col in
                             let index = row * actualCols + col
                             if index < timers.count {
-                                TimerCardView(timer: timers[index], compact: true, size: cardSize, onDelete: {
+                                TimerCardView(timer: timers[index], compact: true, size: cardSize, onDelete: timers.count > 1 ? {
                                     _ = withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                         timers.remove(at: index)
+                                    }
+                                    saveTimers()
+                                } : nil, onAdd: {
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                        timers.append(TimerModel())
                                     }
                                     saveTimers()
                                 })
                                 .frame(width: cardSize, height: cardSize)
                                 .transition(.scale.combined(with: .opacity))
-                            } else if index == timers.count {
-                                // Add button
-                                Button(action: {
-                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                        timers.append(TimerModel())
-                                    }
-                                    saveTimers()
-                                }) {
-                                    RoundedRectangle(cornerRadius: cardSize * 0.06)
-                                        .fill(Color(white: 0.1))
-                                        .overlay(
-                                            Image(systemName: "plus")
-                                                .font(.system(size: cardSize * 0.2, weight: .light))
-                                                .foregroundColor(.gray)
-                                        )
-                                }
-                                .buttonStyle(.plain)
-                                .frame(width: cardSize, height: cardSize)
                             } else {
                                 // Invisible placeholder to complete the row
                                 Color.clear
@@ -419,6 +404,7 @@ struct TimerCardView: View {
     var compact: Bool = false
     var size: CGFloat = 200  // Card size for proportional scaling
     var onDelete: (() -> Void)? = nil
+    var onAdd: (() -> Void)? = nil
 
     private var scale: CGFloat { size / 200 }  // Base size is 200
 
@@ -428,7 +414,8 @@ struct TimerCardView: View {
     ]
 
     var availableClockfaces: [ClockfaceScale] {
-        ClockfaceScale.allCases.filter { $0.seconds >= timer.timeRemaining }
+        // Only allow clockfaces that fit the initial set time (not larger)
+        ClockfaceScale.allCases.filter { $0.seconds >= timer.initialSetSeconds }
     }
 
     func cycleClockface() {
@@ -536,7 +523,7 @@ struct TimerCardView: View {
                     }
 
                     // Duration and Sound pickers - stacked vertically
-                    VStack(spacing: size * 0.015) {
+                    VStack(spacing: size * 0.01) {
                         // Duration picker (1-60 seconds)
                         Menu {
                             ForEach(1...60, id: \.self) { seconds in
@@ -546,7 +533,7 @@ struct TimerCardView: View {
                             }
                         } label: {
                             Text(timer.alarmDuration == 5 ? "5s (Default)" : "\(timer.alarmDuration)s")
-                                .font(.system(size: size * 0.055, weight: .regular))
+                                .font(.system(size: buttonFontSize, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.8))
                         }
                         .menuStyle(.borderlessButton)
@@ -565,7 +552,7 @@ struct TimerCardView: View {
                             }
                         } label: {
                             Text(timer.selectedAlarmSound)
-                                .font(.system(size: size * 0.055, weight: .regular))
+                                .font(.system(size: buttonFontSize, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.8))
                         }
                         .menuStyle(.borderlessButton)
@@ -592,14 +579,22 @@ struct TimerCardView: View {
                     }
                 } else {
                     // Running/Paused: show clock and countdown
-                    AnalogTimerView(
-                        remainingSeconds: timer.timeRemaining,
-                        clockfaceSeconds: timer.selectedClockface.seconds,
-                        onSetTime: { seconds in
-                            timer.timeRemaining = max(1, seconds)
-                            timer.endTime = Date().addingTimeInterval(seconds)
-                        }
-                    )
+                    ZStack {
+                        AnalogTimerView(
+                            remainingSeconds: timer.timeRemaining,
+                            clockfaceSeconds: timer.selectedClockface.seconds,
+                            onSetTime: { seconds in
+                                timer.timeRemaining = max(1, seconds)
+                                timer.endTime = Date().addingTimeInterval(seconds)
+                            }
+                        )
+
+                        // Initial set time - below center dot
+                        Text(timer.initialTimeFormatted)
+                            .font(.system(size: clockSize * 0.07, weight: .medium))
+                            .foregroundStyle(.black.opacity(0.5))
+                            .offset(y: clockSize * 0.08)
+                    }
                     .frame(width: clockSize, height: clockSize)
 
                     // End time with bell icon (below circle, above countdown)
@@ -618,20 +613,13 @@ struct TimerCardView: View {
                 }
             }
 
-            // Top row: initial time (left) and clockface toggle (right) - only when running/paused
+            // Top row: clockface toggle (left) - only when running/paused
             if timer.timerState == .running || timer.timerState == .paused {
                 VStack {
                     HStack {
-                        // Initial set time - top left
-                        Text(timer.initialTimeFormatted)
-                            .font(.system(size: size * 0.05, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.7))
-
-                        Spacer()
-
-                        // Clockface toggle - top right
+                        // Clockface toggle - top left
                         Button(action: cycleClockface) {
-                            Text("Watchface")
+                            Text("\(timer.selectedClockface.label) Watchface")
                                 .font(.system(size: size * 0.035, weight: .medium))
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, size * 0.04)
@@ -640,6 +628,7 @@ struct TimerCardView: View {
                                 .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
+                        Spacer()
                     }
                     Spacer()
                 }
@@ -701,7 +690,22 @@ struct TimerCardView: View {
         }
         .frame(width: size, height: size)
         .background(Color(white: 0.1))
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .overlay(alignment: .topTrailing) {
+            // Glass + button top right of each card
+            if let onAdd = onAdd {
+                Button(action: onAdd) {
+                    Image(systemName: "plus")
+                        .font(.system(size: size * 0.06, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(width: size * 0.12, height: size * 0.12)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .padding(size * 0.03)
+            }
+        }
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture {
@@ -737,7 +741,7 @@ struct TimeDigitField: View {
 
         ZStack {
             // Background - always present, orange when focused
-            RoundedRectangle(cornerRadius: size * 0.07)
+            RoundedRectangle(cornerRadius: size * 0.07, style: .continuous)
                 .fill(isFocused ? Color.orange : Color.clear)
                 .frame(width: fieldWidth, height: fieldHeight)
 
@@ -900,7 +904,7 @@ struct MacOSTimePickerColumn: View {
             // Picker area with drag support
             ZStack {
                 // Selection highlight
-                RoundedRectangle(cornerRadius: 8)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Color.gray.opacity(0.2))
                     .frame(height: 40)
 
@@ -990,7 +994,6 @@ struct AnalogTimerView: View {
 
         // Aim for ~12 labels with sensible divisors
         switch hours {
-        case 168: return stride(from: 0, to: 168, by: 14).map { $0 }  // 12 labels
         case 96: return stride(from: 0, to: 96, by: 8).map { $0 }     // 12 labels
         case 72: return stride(from: 0, to: 72, by: 6).map { $0 }     // 12 labels
         case 48: return stride(from: 0, to: 48, by: 4).map { $0 }     // 12 labels
