@@ -2,9 +2,129 @@ import SwiftUI
 import Combine
 import AppKit
 
+// MARK: - Persistable Timer Data
+struct TimerData: Codable, Identifiable {
+    let id: UUID
+    var selectedHours: Int
+    var selectedMinutes: Int
+    var selectedSeconds: Int
+    var timerState: String  // "idle", "running", "paused"
+    var timeRemaining: TimeInterval
+    var endTime: Date?
+    var timerLabel: String
+    var selectedAlarmSound: String
+    var alarmDuration: Int
+    var selectedClockface: String
+    var initialSetSeconds: TimeInterval
+}
+
+// MARK: - Timer Store (iCloud + UserDefaults persistence)
+class TimerStore: ObservableObject {
+    static let shared = TimerStore()
+    private let iCloudKey = "com.michaelvincent.TimerFantasy.timers"
+    private let userDefaultsKey = "TimerFantasyData"
+
+    private init() {
+        // Register for iCloud change notifications
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(iCloudDidChange),
+            name: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
+            object: NSUbiquitousKeyValueStore.default
+        )
+        NSUbiquitousKeyValueStore.default.synchronize()
+    }
+
+    @objc private func iCloudDidChange(_ notification: Notification) {
+        // Notify that external data changed
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .timersDidChangeExternally, object: nil)
+        }
+    }
+
+    func save(_ timers: [TimerModel]) {
+        let data = timers.map { timer -> TimerData in
+            TimerData(
+                id: timer.id,
+                selectedHours: timer.selectedHours,
+                selectedMinutes: timer.selectedMinutes,
+                selectedSeconds: timer.selectedSeconds,
+                timerState: timer.timerState.rawValue,
+                timeRemaining: timer.timeRemaining,
+                endTime: timer.endTime,
+                timerLabel: timer.timerLabel,
+                selectedAlarmSound: timer.selectedAlarmSound,
+                alarmDuration: timer.alarmDuration,
+                selectedClockface: timer.selectedClockface.rawValue,
+                initialSetSeconds: timer.initialSetSeconds
+            )
+        }
+
+        if let encoded = try? JSONEncoder().encode(data) {
+            // Save to both iCloud and UserDefaults
+            NSUbiquitousKeyValueStore.default.set(encoded, forKey: iCloudKey)
+            UserDefaults.standard.set(encoded, forKey: userDefaultsKey)
+        }
+    }
+
+    func load() -> [TimerModel] {
+        // Try iCloud first, fall back to UserDefaults
+        let data = NSUbiquitousKeyValueStore.default.data(forKey: iCloudKey)
+            ?? UserDefaults.standard.data(forKey: userDefaultsKey)
+
+        guard let data = data,
+              let timerDataArray = try? JSONDecoder().decode([TimerData].self, from: data) else {
+            return [TimerModel()]  // Return default timer if nothing saved
+        }
+
+        return timerDataArray.map { data -> TimerModel in
+            let timer = TimerModel(id: data.id)
+            timer.selectedHours = data.selectedHours
+            timer.selectedMinutes = data.selectedMinutes
+            timer.selectedSeconds = data.selectedSeconds
+            timer.timerState = TimerModel.TimerState(rawValue: data.timerState) ?? .idle
+            timer.timerLabel = data.timerLabel
+            timer.selectedAlarmSound = data.selectedAlarmSound
+            timer.alarmDuration = data.alarmDuration
+            timer.selectedClockface = ClockfaceScale(rawValue: data.selectedClockface) ?? .minutes60
+            timer.initialSetSeconds = data.initialSetSeconds
+
+            // Restore running timer based on endTime
+            if timer.timerState == .running, let endTime = data.endTime {
+                let remaining = endTime.timeIntervalSinceNow
+                if remaining > 0 {
+                    timer.timeRemaining = remaining
+                    timer.endTime = endTime
+                } else {
+                    // Timer expired while app was closed
+                    timer.timerState = .idle
+                    timer.timeRemaining = 0
+                    timer.endTime = nil
+                }
+            } else if timer.timerState == .paused {
+                timer.timeRemaining = data.timeRemaining
+                timer.endTime = nil
+            } else if timer.timerState == .alarming {
+                // Preserve endTime for alarming state (shows when alarm went off)
+                timer.endTime = data.endTime
+                timer.timeRemaining = 0
+            } else {
+                timer.timeRemaining = 0
+                timer.endTime = nil
+            }
+
+            return timer
+        }
+    }
+}
+
+extension Notification.Name {
+    static let timersDidChangeExternally = Notification.Name("timersDidChangeExternally")
+}
+
 // MARK: - Timer Model
 class TimerModel: ObservableObject, Identifiable {
-    let id = UUID()
+    let id: UUID
     @Published var selectedHours = 0
     @Published var selectedMinutes = 15
     @Published var selectedSeconds = 0
@@ -12,17 +132,37 @@ class TimerModel: ObservableObject, Identifiable {
     @Published var timeRemaining: TimeInterval = 0
     @Published var endTime: Date?
     @Published var timerLabel: String = "Timer"
-    @Published var selectedAlarmSound: String = "Radial (Default)"
-    @Published var selectedClockface: ClockfaceScale = .hours168
+    @Published var selectedAlarmSound: String = "Glass (Default)"
+    @Published var alarmDuration: Int = 5  // seconds (1-60)
+    @Published var selectedClockface: ClockfaceScale = .minutes60
+    @Published var initialSetSeconds: TimeInterval = 0  // Time originally set when started
+    @Published var isAlarmRinging: Bool = false  // True while sound is playing
 
-    enum TimerState { case idle, running, paused }
+    enum TimerState: String { case idle, running, paused, alarming }
+
+    init(id: UUID = UUID()) {
+        self.id = id
+    }
 
     var totalSetSeconds: TimeInterval {
         TimeInterval(selectedHours * 3600 + selectedMinutes * 60 + selectedSeconds)
     }
 
+    var initialTimeFormatted: String {
+        let total = Int(initialSetSeconds)
+        let h = total / 3600
+        let m = (total % 3600) / 60
+        let s = total % 60
+        if h > 0 {
+            return String(format: "%d:%02d:%02d", h, m, s)
+        } else {
+            return String(format: "%d:%02d", m, s)
+        }
+    }
+
     func start() {
         guard totalSetSeconds > 0 else { return }
+        initialSetSeconds = totalSetSeconds
         timeRemaining = totalSetSeconds
         endTime = Date().addingTimeInterval(totalSetSeconds)
         timerState = .running
@@ -42,21 +182,55 @@ class TimerModel: ObservableObject, Identifiable {
         endTime = nil
     }
 
+    private var currentSound: NSSound?
+
     func update() {
         guard timerState == .running, let end = endTime else { return }
         let remaining = end.timeIntervalSinceNow
         if remaining <= 0 {
             timeRemaining = 0
-            timerState = .idle
-            NSSound.beep()
+            timerState = .alarming
+            playAlarmSound()
         } else {
             timeRemaining = remaining
         }
     }
+
+    func playAlarmSound() {
+        // Extract sound name without "(Default)" suffix
+        let soundName = selectedAlarmSound.replacingOccurrences(of: " (Default)", with: "")
+        isAlarmRinging = true
+
+        // Try to play from system sounds, loop for 5 seconds
+        if let sound = NSSound(named: NSSound.Name(soundName)) {
+            currentSound = sound
+            sound.loops = true
+            sound.play()
+
+            // Stop sound after alarmDuration seconds but keep showing bell
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(alarmDuration)) { [weak self] in
+                self?.currentSound?.stop()
+                self?.isAlarmRinging = false
+            }
+        } else {
+            // Fallback to system beep
+            NSSound.beep()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [weak self] in
+                self?.isAlarmRinging = false
+            }
+        }
+    }
+
+    func dismissAlarm() {
+        currentSound?.stop()
+        currentSound = nil
+        isAlarmRinging = false
+        timerState = .idle
+    }
 }
 
 // MARK: - Clockface Scale (top level)
-enum ClockfaceScale: CaseIterable {
+enum ClockfaceScale: String, CaseIterable {
     case hours168, hours96, hours72, hours48, hours24, minutes120, minutes60, minutes15, minutes5
 
     var seconds: Double {
@@ -90,7 +264,8 @@ enum ClockfaceScale: CaseIterable {
 
 // MARK: - Main View
 struct ContentView: View {
-    @State private var timers: [TimerModel] = [TimerModel()]
+    @State private var timers: [TimerModel] = []
+    @State private var saveTimer: AnyCancellable?
     let globalTimer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
 
     private let spacing: CGFloat = 8
@@ -101,41 +276,49 @@ struct ContentView: View {
         Int(ceil(Double(timers.count + 1) / Double(columnCount)))
     }
 
-    private func resizeWindow() {
-        guard let window = NSApplication.shared.windows.first else { return }
-        let newWidth = CGFloat(columnCount) * baseCardSize + spacing * CGFloat(columnCount + 1)
-        let newHeight = CGFloat(rowCount) * baseCardSize + spacing * CGFloat(rowCount + 1) + 28 // 28 for title bar
+    private func saveTimers() {
+        TimerStore.shared.save(timers)
+    }
 
-        var frame = window.frame
-        let oldHeight = frame.height
-        frame.size = NSSize(width: newWidth, height: newHeight)
-        // Keep top-left corner in place
-        frame.origin.y += oldHeight - newHeight
-        window.setFrame(frame, display: true, animate: true)
+    private func bestGridLayout(itemCount: Int, windowRatio: Double) -> (cols: Int, rows: Int) {
+        var bestCols = 1
+        var bestRows = itemCount
+        var bestRatioDiff = Double.infinity
+
+        for testCols in 1...itemCount {
+            let testRows = Int(ceil(Double(itemCount) / Double(testCols)))
+            let gridRatio = Double(testCols) / Double(testRows)
+            let diff = abs(gridRatio - windowRatio)
+            if diff < bestRatioDiff {
+                bestRatioDiff = diff
+                bestCols = testCols
+                bestRows = testRows
+            }
+        }
+        return (bestCols, bestRows)
+    }
+
+    private func setupWindow() {
+        guard let window = NSApplication.shared.windows.first else { return }
+        // Allow completely free resizing
+        window.resizeIncrements = NSSize(width: 1, height: 1)
+        // Minimum size for one card
+        window.minSize = NSSize(width: baseCardSize + spacing * 2, height: baseCardSize + spacing * 2 + 28)
     }
 
     var body: some View {
         GeometryReader { geo in
-            let itemCount = timers.count + 1
-
-            // Calculate columns and rows based on window size
-            let cols = max(1, Int((geo.size.width + spacing) / (baseCardSize + spacing)))
-            let rows = max(1, Int((geo.size.height + spacing) / (baseCardSize + spacing)))
-
-            // Card size to fill available space
-            let availableWidth = geo.size.width - spacing * CGFloat(cols + 1)
-            let availableHeight = geo.size.height - spacing * CGFloat(rows + 1)
-            let cardSize = min(availableWidth / CGFloat(cols), availableHeight / CGFloat(rows))
-
-            let columns = Array(repeating: GridItem(.fixed(cardSize), spacing: spacing), count: cols)
-
-            let gridWidth = CGFloat(cols) * cardSize + CGFloat(cols - 1) * spacing
-            let gridHeight = CGFloat(rows) * cardSize + CGFloat(rows - 1) * spacing
-
-            // Use HStack of VStacks for explicit grid layout with centering
             let allItems = timers.count + 1
-            let actualCols = min(cols, allItems)  // Don't show more columns than items
-            let actualRows = Int(ceil(Double(allItems) / Double(actualCols)))
+            let windowRatio = geo.size.width / geo.size.height
+            let layout = bestGridLayout(itemCount: allItems, windowRatio: windowRatio)
+            let actualCols = layout.cols
+            let actualRows = layout.rows
+
+            // Card size to fill available space based on actual grid dimensions
+            let availableWidth = geo.size.width - spacing * CGFloat(actualCols + 1)
+            let availableHeight = geo.size.height - spacing * CGFloat(actualRows + 1)
+            let cardSize = min(availableWidth / CGFloat(actualCols), availableHeight / CGFloat(actualRows))
+
             let actualGridWidth = CGFloat(actualCols) * cardSize + CGFloat(actualCols - 1) * spacing
             let actualGridHeight = CGFloat(actualRows) * cardSize + CGFloat(actualRows - 1) * spacing
 
@@ -146,23 +329,20 @@ struct ContentView: View {
                             let index = row * actualCols + col
                             if index < timers.count {
                                 TimerCardView(timer: timers[index], compact: true, size: cardSize, onDelete: {
-                                    withAnimation {
+                                    _ = withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                         timers.remove(at: index)
                                     }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                        resizeWindow()
-                                    }
+                                    saveTimers()
                                 })
                                 .frame(width: cardSize, height: cardSize)
+                                .transition(.scale.combined(with: .opacity))
                             } else if index == timers.count {
                                 // Add button
                                 Button(action: {
-                                    withAnimation {
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                         timers.append(TimerModel())
                                     }
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                        resizeWindow()
-                                    }
+                                    saveTimers()
                                 }) {
                                     RoundedRectangle(cornerRadius: cardSize * 0.06)
                                         .fill(Color(white: 0.1))
@@ -174,6 +354,10 @@ struct ContentView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .frame(width: cardSize, height: cardSize)
+                            } else {
+                                // Invisible placeholder to complete the row
+                                Color.clear
+                                    .frame(width: cardSize, height: cardSize)
                             }
                         }
                     }
@@ -183,10 +367,20 @@ struct ContentView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .preferredColorScheme(.dark)
+        .onAppear {
+            // Load saved timers
+            timers = TimerStore.shared.load()
+            if timers.isEmpty {
+                timers = [TimerModel()]
+            }
+            setupWindow()
+        }
         .onReceive(globalTimer) { _ in
             for timer in timers {
                 timer.update()
             }
+            // Save periodically (every update cycle)
+            saveTimers()
         }
     }
 }
@@ -229,12 +423,8 @@ struct TimerCardView: View {
     private var scale: CGFloat { size / 200 }  // Base size is 200
 
     let alarmSounds = [
-        "Radial (Default)", "Arpeggio", "Breaking", "Canopy", "Chalet",
-        "Chirp", "Daybreak", "Departure", "Dollop", "Journey", "Kettle",
-        "Beacon", "Bulletin", "Chimes", "Circuit", "Constellation",
-        "Cosmic", "Crystals", "Hillside", "Illuminate", "Night Owl",
-        "Opening", "Playtime", "Presto", "Radar", "Sencha", "Signal",
-        "Silk", "Slow Rise", "Stargaze", "Summit", "Twinkle", "Uplift"
+        "Glass (Default)", "Basso", "Blow", "Bottle", "Frog", "Funk",
+        "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"
     ]
 
     var availableClockfaces: [ClockfaceScale] {
@@ -253,6 +443,8 @@ struct TimerCardView: View {
     }
 
     @FocusState private var focusedField: TimeField?
+    @State private var showDeleteConfirmation = false
+    @State private var showCancelConfirmation = false
 
     enum TimeField: Hashable {
         case hours, minutes, seconds, label
@@ -262,13 +454,14 @@ struct TimerCardView: View {
         switch timer.timerState {
         case .idle, .paused: return "Start"
         case .running: return "Pause"
+        case .alarming: return ""
         }
     }
 
     var rightButtonColor: Color {
         switch timer.timerState {
         case .idle, .paused: return .green
-        case .running: return .orange
+        case .running, .alarming: return .orange
         }
     }
 
@@ -277,6 +470,7 @@ struct TimerCardView: View {
         case .idle: timer.start()
         case .running: timer.pause()
         case .paused: timer.resume()
+        case .alarming: timer.dismissAlarm()
         }
     }
 
@@ -325,12 +519,76 @@ struct TimerCardView: View {
                     HStack(spacing: 0) {
                         TimeDigitField(value: $timer.selectedHours, maxValue: 168, isFocused: focusedField == .hours, size: size * 0.22, onSubmit: { timer.start() })
                             .focused($focusedField, equals: .hours)
-                        Text(":").font(.system(size: digitFontSize, weight: .thin)).foregroundStyle(.white)
+                        Text(":")
+                            .font(.system(size: digitFontSize, weight: .thin))
+                            .foregroundStyle(.white)
+                            .frame(width: size * 0.05)
+                            .transition(.opacity.combined(with: .scale))
                         TimeDigitField(value: $timer.selectedMinutes, maxValue: 59, isFocused: focusedField == .minutes, size: size * 0.22, onSubmit: { timer.start() })
                             .focused($focusedField, equals: .minutes)
-                        Text(":").font(.system(size: digitFontSize, weight: .thin)).foregroundStyle(.white)
+                        Text(":")
+                            .font(.system(size: digitFontSize, weight: .thin))
+                            .foregroundStyle(.white)
+                            .frame(width: size * 0.05)
+                            .transition(.opacity.combined(with: .scale))
                         TimeDigitField(value: $timer.selectedSeconds, maxValue: 59, isFocused: focusedField == .seconds, size: size * 0.22, onSubmit: { timer.start() })
                             .focused($focusedField, equals: .seconds)
+                    }
+
+                    // Duration and Sound pickers - stacked vertically
+                    VStack(spacing: size * 0.015) {
+                        // Duration picker (1-60 seconds)
+                        Menu {
+                            ForEach(1...60, id: \.self) { seconds in
+                                Button(seconds == 5 ? "5s (Default)" : "\(seconds)s") {
+                                    timer.alarmDuration = seconds
+                                }
+                            }
+                        } label: {
+                            Text(timer.alarmDuration == 5 ? "5s (Default)" : "\(timer.alarmDuration)s")
+                                .font(.system(size: size * 0.055, weight: .regular))
+                                .foregroundStyle(.white.opacity(0.8))
+                        }
+                        .menuStyle(.borderlessButton)
+
+                        // Sound picker
+                        Menu {
+                            ForEach(alarmSounds, id: \.self) { sound in
+                                Button(sound) {
+                                    timer.selectedAlarmSound = sound
+                                    // Preview sound
+                                    let soundName = sound.replacingOccurrences(of: " (Default)", with: "")
+                                    if let s = NSSound(named: NSSound.Name(soundName)) {
+                                        s.play()
+                                    }
+                                }
+                            }
+                        } label: {
+                            Text(timer.selectedAlarmSound)
+                                .font(.system(size: size * 0.055, weight: .regular))
+                                .foregroundStyle(.white.opacity(0.8))
+                        }
+                        .menuStyle(.borderlessButton)
+                    }
+                } else if timer.timerState == .alarming {
+                    // Alarming: show bell with end time below, tap to dismiss
+                    VStack(spacing: size * 0.02) {
+                        Image(systemName: "bell.fill")
+                            .font(.system(size: size * 0.3))
+                            .foregroundStyle(.orange)
+                            .symbolEffect(.pulse, options: .repeating, isActive: timer.isAlarmRinging)
+
+                        // End time hung below bell
+                        HStack(spacing: size * 0.01) {
+                            Image(systemName: "bell.fill")
+                                .font(.system(size: size * 0.025))
+                            Text(getEndTimeString())
+                                .font(.system(size: size * 0.035, weight: .medium))
+                        }
+                        .foregroundStyle(.white.opacity(0.5))
+                    }
+                    .onTapGesture {
+                        timer.dismissAlarm()
                     }
                 } else {
                     // Running/Paused: show clock and countdown
@@ -344,6 +602,15 @@ struct TimerCardView: View {
                     )
                     .frame(width: clockSize, height: clockSize)
 
+                    // End time with bell icon (below circle, above countdown)
+                    HStack(spacing: size * 0.01) {
+                        Image(systemName: "bell.fill")
+                            .font(.system(size: size * 0.025))
+                        Text(getEndTimeString())
+                            .font(.system(size: size * 0.035, weight: .medium))
+                    }
+                    .foregroundStyle(.white.opacity(0.5))
+
                     Text(formatDuration(timer.timeRemaining))
                         .font(.system(size: countdownFontSize, weight: .thin))
                         .monospacedDigit()
@@ -351,13 +618,20 @@ struct TimerCardView: View {
                 }
             }
 
-            // Clockface toggle - top right (only when running/paused)
-            if timer.timerState != .idle {
+            // Top row: initial time (left) and clockface toggle (right) - only when running/paused
+            if timer.timerState == .running || timer.timerState == .paused {
                 VStack {
                     HStack {
+                        // Initial set time - top left
+                        Text(timer.initialTimeFormatted)
+                            .font(.system(size: size * 0.05, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.7))
+
                         Spacer()
+
+                        // Clockface toggle - top right
                         Button(action: cycleClockface) {
-                            Text(timer.selectedClockface.label)
+                            Text("Watchface")
                                 .font(.system(size: size * 0.035, weight: .medium))
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, size * 0.04)
@@ -372,42 +646,58 @@ struct TimerCardView: View {
                 .padding(padding)
             }
 
-            // Bottom buttons - Delete/Cancel left, Start/Pause right
-            VStack {
-                Spacer()
-                HStack {
-                    Button(action: {
-                        if timer.timerState == .idle {
-                            onDelete?()
-                        } else {
-                            timer.cancel()
-                        }
-                    }) {
-                        Text(timer.timerState == .idle ? "Delete" : "Cancel")
-                            .font(.system(size: buttonFontSize, weight: .medium))
-                            .foregroundStyle(timer.timerState == .idle && onDelete == nil ? .gray : .white)
-                            .frame(width: buttonWidth, height: buttonHeight)
-                            .background(Color(white: 0.2))
-                            .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(timer.timerState == .idle && onDelete == nil)
-
+            // Bottom buttons - Delete/Cancel left, Start/Pause right (hide when alarming)
+            if timer.timerState != .alarming {
+                VStack {
                     Spacer()
+                    HStack {
+                        Button(action: {
+                            if timer.timerState == .idle {
+                                showDeleteConfirmation = true
+                            } else {
+                                showCancelConfirmation = true
+                            }
+                        }) {
+                            Text(timer.timerState == .idle ? "Delete" : "Cancel")
+                                .font(.system(size: buttonFontSize, weight: .medium))
+                                .foregroundStyle(timer.timerState == .idle && onDelete == nil ? .gray : .white)
+                                .frame(width: buttonWidth, height: buttonHeight)
+                                .background(Color(white: 0.2))
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(timer.timerState == .idle && onDelete == nil)
 
-                    Button(action: toggleTimer) {
-                        Text(rightButtonLabel)
-                            .font(.system(size: buttonFontSize, weight: .medium))
-                            .foregroundStyle(timer.timerState == .idle && timer.totalSetSeconds == 0 ? .gray : rightButtonColor)
-                            .frame(width: buttonWidth, height: buttonHeight)
-                            .background(rightButtonColor.opacity(timer.timerState == .idle && timer.totalSetSeconds == 0 ? 0.1 : 0.3))
-                            .clipShape(Capsule())
+                        Spacer()
+
+                        Button(action: toggleTimer) {
+                            Text(rightButtonLabel)
+                                .font(.system(size: buttonFontSize, weight: .medium))
+                                .foregroundStyle(timer.timerState == .idle && timer.totalSetSeconds == 0 ? .gray : rightButtonColor)
+                                .frame(width: buttonWidth, height: buttonHeight)
+                                .background(rightButtonColor.opacity(timer.timerState == .idle && timer.totalSetSeconds == 0 ? 0.1 : 0.3))
+                                .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(timer.timerState == .idle && timer.totalSetSeconds == 0)
                     }
-                    .buttonStyle(.plain)
-                    .disabled(timer.timerState == .idle && timer.totalSetSeconds == 0)
+                }
+                .padding(padding)
+                .confirmationDialog("Delete Timer?", isPresented: $showDeleteConfirmation) {
+                    Button("Delete", role: .destructive) {
+                        onDelete?()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    Button("Keep", role: .cancel) {}
+                }
+                .confirmationDialog("Cancel Timer?", isPresented: $showCancelConfirmation) {
+                    Button("Cancel Timer", role: .destructive) {
+                        timer.cancel()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                    Button("Keep Running", role: .cancel) {}
                 }
             }
-            .padding(padding)
         }
         .frame(width: size, height: size)
         .background(Color(white: 0.1))
@@ -418,7 +708,11 @@ struct TimerCardView: View {
             focusedField = nil
         }
         .onAppear {
+            // Clear focus to prevent visible field highlight
             focusedField = nil
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                NSApp.keyWindow?.makeFirstResponder(nil)
+            }
         }
     }
 
@@ -434,6 +728,7 @@ struct TimeDigitField: View {
     @State private var textValue: String = ""
     @State private var isEditing: Bool = false
     @State private var hasTyped: Bool = false
+    @State private var showHighlight: Bool = false
 
     var body: some View {
         let fieldWidth: CGFloat = size
@@ -779,8 +1074,8 @@ struct AnalogTimerView: View {
                         endAngle: .degrees(-90 - angle),
                         clockwise: true
                     )
-                    .fill(Color.red)
-                    .frame(width: size * 0.63, height: size * 0.63)
+                    .fill(Color.orange)
+                    .frame(width: size * 0.65, height: size * 0.65)
                 }
 
                 // Number labels (CCW from top) - outside the clock
