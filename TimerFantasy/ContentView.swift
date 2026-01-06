@@ -16,12 +16,13 @@ struct TimerData: Codable, Identifiable {
     var alarmDuration: Int
     var selectedClockface: String
     var initialSetSeconds: TimeInterval
+    var isLooping: Bool
 }
 
 // MARK: - Timer Store (iCloud + UserDefaults persistence)
 class TimerStore: ObservableObject {
     static let shared = TimerStore()
-    private let iCloudKey = "com.michaelvincent.TimerFantasy.timers"
+    private let iCloudKey = "com.timerfantasy.timers"
     private let userDefaultsKey = "TimerFantasyData"
 
     private init() {
@@ -56,7 +57,8 @@ class TimerStore: ObservableObject {
                 selectedAlarmSound: timer.selectedAlarmSound,
                 alarmDuration: timer.alarmDuration,
                 selectedClockface: timer.selectedClockface.rawValue,
-                initialSetSeconds: timer.initialSetSeconds
+                initialSetSeconds: timer.initialSetSeconds,
+                isLooping: timer.isLooping
             )
         }
 
@@ -88,6 +90,7 @@ class TimerStore: ObservableObject {
             timer.alarmDuration = data.alarmDuration
             timer.selectedClockface = ClockfaceScale(rawValue: data.selectedClockface) ?? .minutes60
             timer.initialSetSeconds = data.initialSetSeconds
+            timer.isLooping = data.isLooping
 
             // Restore running timer based on endTime
             if timer.timerState == .running, let endTime = data.endTime {
@@ -137,6 +140,7 @@ class TimerModel: ObservableObject, Identifiable {
     @Published var selectedClockface: ClockfaceScale = .minutes60
     @Published var initialSetSeconds: TimeInterval = 0  // Time originally set when started
     @Published var isAlarmRinging: Bool = false  // True while sound is playing
+    @Published var isLooping: Bool = false  // Auto-restart when timer ends
 
     enum TimerState: String { case idle, running, paused, alarming }
 
@@ -189,8 +193,15 @@ class TimerModel: ObservableObject, Identifiable {
         let remaining = end.timeIntervalSinceNow
         if remaining <= 0 {
             timeRemaining = 0
-            timerState = .alarming
             playAlarmSound()
+            if isLooping {
+                // Auto-restart with original time
+                timeRemaining = initialSetSeconds
+                endTime = Date().addingTimeInterval(initialSetSeconds)
+                // Stay in running state
+            } else {
+                timerState = .alarming
+            }
         } else {
             timeRemaining = remaining
         }
@@ -231,7 +242,7 @@ class TimerModel: ObservableObject, Identifiable {
 
 // MARK: - Clockface Scale (top level)
 enum ClockfaceScale: String, CaseIterable {
-    case hours96, hours72, hours48, hours24, minutes120, minutes60, minutes15, minutes5
+    case hours96, hours72, hours48, hours24, minutes120, minutes60, minutes15, minutes9, minutes5, seconds60
 
     var seconds: Double {
         switch self {
@@ -242,7 +253,9 @@ enum ClockfaceScale: String, CaseIterable {
         case .minutes120: return 120 * 60
         case .minutes60: return 60 * 60
         case .minutes15: return 15 * 60
+        case .minutes9: return 9 * 60
         case .minutes5: return 5 * 60
+        case .seconds60: return 60
         }
     }
 
@@ -255,7 +268,9 @@ enum ClockfaceScale: String, CaseIterable {
         case .minutes120: return "120m"
         case .minutes60: return "60m"
         case .minutes15: return "15m"
+        case .minutes9: return "9m"
         case .minutes5: return "5m"
+        case .seconds60: return "60s"
         }
     }
 }
@@ -556,6 +571,18 @@ struct TimerCardView: View {
                                 .foregroundStyle(.white.opacity(0.8))
                         }
                         .menuStyle(.borderlessButton)
+
+                        // Loop toggle
+                        Button(action: { timer.isLooping.toggle() }) {
+                            HStack(spacing: size * 0.01) {
+                                Image(systemName: timer.isLooping ? "repeat.circle.fill" : "repeat.circle")
+                                    .font(.system(size: buttonFontSize * 1.2))
+                                Text(timer.isLooping ? "Loop On" : "Loop")
+                                    .font(.system(size: buttonFontSize, weight: .medium))
+                            }
+                            .foregroundStyle(timer.isLooping ? .orange : .white.opacity(0.8))
+                        }
+                        .buttonStyle(.plain)
                     }
                 } else if timer.timerState == .alarming {
                     // Alarming: show bell with end time below, tap to dismiss
@@ -578,7 +605,7 @@ struct TimerCardView: View {
                         timer.dismissAlarm()
                     }
                 } else {
-                    // Running/Paused: show clock and countdown
+                    // Running/Paused: clock centered with bell time hung below
                     ZStack {
                         AnalogTimerView(
                             remainingSeconds: timer.timeRemaining,
@@ -588,28 +615,29 @@ struct TimerCardView: View {
                                 timer.endTime = Date().addingTimeInterval(seconds)
                             }
                         )
+                        .frame(width: clockSize, height: clockSize)
 
-                        // Initial set time - below center dot
-                        Text(timer.initialTimeFormatted)
-                            .font(.system(size: clockSize * 0.07, weight: .medium))
-                            .foregroundStyle(.black.opacity(0.5))
-                            .offset(y: clockSize * 0.08)
+                        // Initial set time and countdown - below center dot
+                        VStack(spacing: clockSize * 0.02) {
+                            Text(timer.initialTimeFormatted)
+                                .font(.system(size: clockSize * 0.07, weight: .medium))
+                                .foregroundStyle(.black.opacity(0.5))
+                            Text(formatDuration(timer.timeRemaining))
+                                .font(.system(size: clockSize * 0.07, weight: .medium))
+                                .foregroundStyle(.black)
+                        }
+                        .offset(y: clockSize * 0.12)
+
+                        // End time with bell icon - hung below clock
+                        HStack(spacing: size * 0.01) {
+                            Image(systemName: "bell.fill")
+                                .font(.system(size: size * 0.025))
+                            Text(getEndTimeString())
+                                .font(.system(size: size * 0.035, weight: .medium))
+                        }
+                        .foregroundStyle(.white.opacity(0.5))
+                        .offset(y: clockSize * 0.58)
                     }
-                    .frame(width: clockSize, height: clockSize)
-
-                    // End time with bell icon (below circle, above countdown)
-                    HStack(spacing: size * 0.01) {
-                        Image(systemName: "bell.fill")
-                            .font(.system(size: size * 0.025))
-                        Text(getEndTimeString())
-                            .font(.system(size: size * 0.035, weight: .medium))
-                    }
-                    .foregroundStyle(.white.opacity(0.5))
-
-                    Text(formatDuration(timer.timeRemaining))
-                        .font(.system(size: countdownFontSize, weight: .thin))
-                        .monospacedDigit()
-                        .foregroundStyle(.white)
                 }
             }
 
@@ -1001,11 +1029,18 @@ struct AnalogTimerView: View {
         default: break
         }
 
+        // For scales <= 60 seconds or <= 60 minutes, use standard 60-unit clock face
+        let secs = Int(clockfaceSeconds)
+        if secs <= 60 {
+            // Use 60-second clock face for all sub-minute scales (15s, 30s, 45s, 60s)
+            return stride(from: 0, to: 60, by: 5).map { $0 }  // 0, 5, 10, 15...55
+        }
+
         switch mins {
         case 120: return stride(from: 0, to: 120, by: 10).map { $0 }  // 12 labels
-        case 60: return stride(from: 0, to: 60, by: 5).map { $0 }     // 12 labels
-        case 15: return stride(from: 0, to: 15, by: 5).map { $0 }     // 3 labels: 0,5,10
-        case 5: return [0, 1, 2, 3, 4]                                 // 5 labels
+        case 1...60:
+            // Use 60-minute clock face for all sub-hour scales (1m, 5m, 6m, 9m, 15m, 60m)
+            return stride(from: 0, to: 60, by: 5).map { $0 }  // 0, 5, 10, 15...55
         default:
             let step = max(mins / 12, 1)
             return stride(from: 0, to: mins, by: step).map { $0 }
@@ -1021,12 +1056,18 @@ struct AnalogTimerView: View {
     }
 
     private var maxValue: Int {
+        let secs = Int(clockfaceSeconds)
         let mins = Int(clockfaceSeconds / 60)
         let hours = clockfaceSeconds / 3600
 
-        // For hour scales > 2h, use hours; otherwise use minutes
+        // For hour scales > 2h, use hours
         if hours > 2 { return Int(hours) }
-        else { return mins }
+        // For sub-minute scales, use 60 seconds
+        if secs <= 60 { return 60 }
+        // For sub-hour scales (1-60 mins), use 60 minutes
+        if mins <= 60 { return 60 }
+        // For 120 mins
+        return mins
     }
 
     var body: some View {
