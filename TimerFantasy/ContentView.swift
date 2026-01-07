@@ -18,6 +18,9 @@ struct TimerData: Codable, Identifiable {
     var initialSetSeconds: TimeInterval
     var isLooping: Bool
     var timerColorHex: String?  // Hex string for pie slice color
+    var useAutoColor: Bool?
+    var useAutoClockface: Bool?
+    var useFlashWarning: Bool?
 }
 
 // MARK: - Color Hex Conversion
@@ -87,7 +90,10 @@ class TimerStore: ObservableObject {
                 selectedClockface: timer.selectedClockface.rawValue,
                 initialSetSeconds: timer.initialSetSeconds,
                 isLooping: timer.isLooping,
-                timerColorHex: timer.timerColor.hexString
+                timerColorHex: timer.timerColor.hexString,
+                useAutoColor: timer.useAutoColor,
+                useAutoClockface: timer.useAutoClockface,
+                useFlashWarning: timer.useFlashWarning
             )
         }
 
@@ -122,6 +128,15 @@ class TimerStore: ObservableObject {
             timer.isLooping = data.isLooping
             if let hex = data.timerColorHex {
                 timer.timerColor = Color(hex: hex)
+            }
+            if let useAutoColor = data.useAutoColor {
+                timer.useAutoColor = useAutoColor
+            }
+            if let useAutoClockface = data.useAutoClockface {
+                timer.useAutoClockface = useAutoClockface
+            }
+            if let useFlashWarning = data.useFlashWarning {
+                timer.useFlashWarning = useFlashWarning
             }
 
             // Restore running timer based on endTime
@@ -173,7 +188,10 @@ class TimerModel: ObservableObject, Identifiable {
     @Published var initialSetSeconds: TimeInterval = 0  // Time originally set when started
     @Published var isAlarmRinging: Bool = false  // True while sound is playing
     @Published var isLooping: Bool = false  // Auto-restart when timer ends
-    @Published var timerColor: Color = .orange  // Pie slice color
+    @Published var timerColor: Color = .orange  // Pie slice color (manual)
+    @Published var useAutoColor: Bool = true  // Auto rainbow color based on time remaining
+    @Published var useAutoClockface: Bool = true  // Auto-shrink watchface as time decreases
+    @Published var useFlashWarning: Bool = true  // Flash in last 5%
 
     enum TimerState: String { case idle, running, paused, alarming }
 
@@ -195,6 +213,64 @@ class TimerModel: ObservableObject, Identifiable {
         } else {
             return String(format: "%d:%02d", m, s)
         }
+    }
+
+    // Auto-select smallest watchface that fits remaining time
+    var autoClockface: ClockfaceScale {
+        ClockfaceScale.allCases.last { $0.seconds >= timeRemaining } ?? .hours96
+    }
+
+    // Effective clockface (auto or manual)
+    var effectiveClockface: ClockfaceScale {
+        useAutoClockface ? autoClockface : selectedClockface
+    }
+
+    // Effective color (auto or manual, with flash warning)
+    var effectiveColor: Color {
+        let baseColor = useAutoColor ? autoColor : timerColor
+
+        // Flash in last 5%
+        if useFlashWarning && initialSetSeconds > 0 {
+            let percent = timeRemaining / initialSetSeconds
+            if percent < 0.05 {
+                // Flash every 0.25 seconds
+                let flash = Int(Date().timeIntervalSinceReferenceDate * 4) % 2 == 0
+                return flash ? baseColor : Color.white
+            }
+        }
+
+        return baseColor
+    }
+
+    // Urgency colors: white → red as time runs out
+    var autoColor: Color {
+        guard initialSetSeconds > 0 else { return .orange }
+        let percent = timeRemaining / initialSetSeconds
+
+        // 7 shades: white → yellow → orange → red
+        let colors: [(Double, Double, Double)] = [
+            (1.00, 1.00, 1.00),  // White
+            (1.00, 1.00, 0.85),  // Cream
+            (1.00, 0.95, 0.60),  // Light yellow
+            (1.00, 0.80, 0.20),  // Yellow
+            (1.00, 0.55, 0.10),  // Orange
+            (1.00, 0.30, 0.15),  // Red-orange
+            (0.95, 0.15, 0.15),  // Red
+        ]
+
+        let segment = (1.0 - percent) * Double(colors.count - 1)
+        let index = min(Int(segment), colors.count - 2)
+        let t = segment - Double(index)
+
+        let c1 = colors[index]
+        let c2 = colors[index + 1]
+
+        // Interpolate between adjacent colors
+        let r = c1.0 + (c2.0 - c1.0) * t
+        let g = c1.1 + (c2.1 - c1.1) * t
+        let b = c1.2 + (c2.2 - c1.2) * t
+
+        return Color(red: r, green: g, blue: b)
     }
 
     func start() {
@@ -593,18 +669,38 @@ struct TimerCardView: View {
     }
 
     func copyTimerAsMarkdown() {
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd h:mm a"
+        let timeFormatter = DateFormatter()
+        timeFormatter.dateFormat = "h:mm a"
+
         var md = "## \(timer.timerLabel)\n\n"
+
+        // Calculate when timer was started
+        if let end = timer.endTime {
+            let startTime = end.addingTimeInterval(-timer.initialSetSeconds)
+            md += "- **Started:** \(dateFormatter.string(from: startTime))\n"
+        }
+
         md += "- **Duration:** \(timer.initialTimeFormatted)\n"
         md += "- **Remaining:** \(formatDuration(timer.timeRemaining))\n"
+
         if let end = timer.endTime {
-            let formatter = DateFormatter()
-            formatter.dateFormat = "h:mm a"
-            md += "- **Ends at:** \(formatter.string(from: end))\n"
+            md += "- **Ends at:** \(timeFormatter.string(from: end))\n"
         }
+
         md += "- **Status:** \(timer.timerState == .running ? "Running" : "Paused")\n"
+
+        // Alarm settings
+        let soundName = timer.selectedAlarmSound.replacingOccurrences(of: " (Default)", with: "")
+        md += "- **Alarm:** \(soundName) for \(timer.alarmDuration)s\n"
+
         if timer.isLooping {
             md += "- **Looping:** Yes\n"
         }
+
+        // Timestamp of export
+        md += "\n*Exported \(dateFormatter.string(from: Date()))*\n"
 
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(md, forType: .string)
@@ -796,8 +892,8 @@ struct TimerCardView: View {
                     ZStack {
                         AnalogTimerView(
                             remainingSeconds: timer.timeRemaining,
-                            clockfaceSeconds: timer.selectedClockface.seconds,
-                            pieColor: timer.timerColor,
+                            clockfaceSeconds: timer.effectiveClockface.seconds,
+                            pieColor: timer.effectiveColor,
                             onSetTime: { seconds in
                                 timer.timeRemaining = max(1, seconds)
                                 timer.endTime = Date().addingTimeInterval(seconds)
@@ -868,14 +964,18 @@ struct TimerCardView: View {
                 }
             }
 
-            // Top row: clockface toggle and label (left), color picker (right) - only when running/paused
+            // Top row: clockface toggle and label (left) - only when running/paused
             if timer.timerState == .running || timer.timerState == .paused {
                 VStack {
                     HStack {
                         // Clockface toggle and label - top left, stacked
                         VStack(alignment: .leading, spacing: size * 0.01) {
-                            Button(action: cycleClockface) {
-                                Text("\(timer.selectedClockface.label) Watchface")
+                            Button(action: {
+                                if !timer.useAutoClockface {
+                                    cycleClockface()
+                                }
+                            }) {
+                                Text("\(timer.effectiveClockface.label) Watchface\(timer.useAutoClockface ? " ⚡" : "")")
                                     .font(.system(size: size * 0.035, weight: .medium))
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, size * 0.04)
@@ -892,10 +992,6 @@ struct TimerCardView: View {
                                 .padding(.leading, size * 0.02)
                         }
                         Spacer()
-                        // Color picker - top right
-                        ColorPicker("", selection: $timer.timerColor, supportsOpacity: false)
-                            .labelsHidden()
-                            .frame(width: size * 0.08, height: size * 0.08)
                     }
                     Spacer()
                 }
@@ -957,37 +1053,50 @@ struct TimerCardView: View {
         .background(Color(white: 0.1))
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .overlay(alignment: .topTrailing) {
-            // Top right buttons: menu and add
-            HStack(spacing: size * 0.02) {
-                // Menu button (only when running/paused)
-                if timer.timerState == .running || timer.timerState == .paused {
-                    Menu {
-                        Button(action: { copyTimerAsMarkdown() }) {
-                            Label("Copy as Markdown", systemImage: "doc.on.doc")
+            // Top right buttons: menu, add, and color picker stacked
+            VStack(alignment: .trailing, spacing: size * 0.02) {
+                HStack(spacing: size * 0.02) {
+                    // Menu button (only when running/paused)
+                    if timer.timerState == .running || timer.timerState == .paused {
+                        Menu {
+                            Button(action: { copyTimerAsMarkdown() }) {
+                                Label("Copy as Markdown", systemImage: "doc.on.doc")
+                            }
+                            Divider()
+                            Button(action: { timer.useAutoColor.toggle() }) {
+                                Label("Auto Color", systemImage: timer.useAutoColor ? "checkmark.circle.fill" : "circle")
+                            }
+                            Button(action: { timer.useAutoClockface.toggle() }) {
+                                Label("Auto Zoom", systemImage: timer.useAutoClockface ? "checkmark.circle.fill" : "circle")
+                            }
+                            Button(action: { timer.useFlashWarning.toggle() }) {
+                                Label("Flash Warning", systemImage: timer.useFlashWarning ? "checkmark.circle.fill" : "circle")
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: size * 0.05, weight: .medium))
+                                .foregroundStyle(.white)
+                                .frame(width: size * 0.12, height: size * 0.12)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
                         }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.system(size: size * 0.05, weight: .medium))
-                            .foregroundStyle(.white)
-                            .frame(width: size * 0.12, height: size * 0.12)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
+                        .menuStyle(.borderlessButton)
                     }
-                    .menuStyle(.borderlessButton)
+
+                    // Add button
+                    if let onAdd = onAdd {
+                        Button(action: onAdd) {
+                            Image(systemName: "plus")
+                                .font(.system(size: size * 0.06, weight: .medium))
+                                .foregroundStyle(.white)
+                                .frame(width: size * 0.12, height: size * 0.12)
+                                .background(.ultraThinMaterial)
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
 
-                // Add button
-                if let onAdd = onAdd {
-                    Button(action: onAdd) {
-                        Image(systemName: "plus")
-                            .font(.system(size: size * 0.06, weight: .medium))
-                            .foregroundStyle(.white)
-                            .frame(width: size * 0.12, height: size * 0.12)
-                            .background(.ultraThinMaterial)
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                }
             }
             .padding(size * 0.03)
         }
