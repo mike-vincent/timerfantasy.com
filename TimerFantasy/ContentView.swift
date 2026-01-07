@@ -229,9 +229,10 @@ class TimerModel: ObservableObject, Identifiable {
     var effectiveColor: Color {
         let baseColor = useAutoColor ? autoColor : timerColor
 
-        // Flash in last 5%
-        if useFlashWarning && initialSetSeconds > 0 {
-            let percent = timeRemaining / initialSetSeconds
+        // Flash in last 5% of current watchface
+        if useFlashWarning {
+            let clockfaceSeconds = effectiveClockface.seconds
+            let percent = clockfaceSeconds > 0 ? timeRemaining / clockfaceSeconds : 1.0
             if percent < 0.05 {
                 // Flash every 0.25 seconds
                 let flash = Int(Date().timeIntervalSinceReferenceDate * 4) % 2 == 0
@@ -242,35 +243,19 @@ class TimerModel: ObservableObject, Identifiable {
         return baseColor
     }
 
-    // Urgency colors: white → red as time runs out
+    // Urgency: red with increasing opacity as time runs out
+    // Based on original timer duration, not watchface
     var autoColor: Color {
-        guard initialSetSeconds > 0 else { return .orange }
+        guard initialSetSeconds > 0 else { return .red }
         let percent = timeRemaining / initialSetSeconds
 
-        // 7 shades: white → yellow → orange → red
-        let colors: [(Double, Double, Double)] = [
-            (1.00, 1.00, 1.00),  // White
-            (1.00, 1.00, 0.85),  // Cream
-            (1.00, 0.95, 0.60),  // Light yellow
-            (1.00, 0.80, 0.20),  // Yellow
-            (1.00, 0.55, 0.10),  // Orange
-            (1.00, 0.30, 0.15),  // Red-orange
-            (0.95, 0.15, 0.15),  // Red
-        ]
+        // Linear progression: ~50% opacity at halfway point
+        let progress = 1.0 - percent
 
-        let segment = (1.0 - percent) * Double(colors.count - 1)
-        let index = min(Int(segment), colors.count - 2)
-        let t = segment - Double(index)
+        // Opacity goes from 0.1 (full time) to 1.0 (no time)
+        let opacity = 0.1 + progress * 0.9
 
-        let c1 = colors[index]
-        let c2 = colors[index + 1]
-
-        // Interpolate between adjacent colors
-        let r = c1.0 + (c2.0 - c1.0) * t
-        let g = c1.1 + (c2.1 - c1.1) * t
-        let b = c1.2 + (c2.2 - c1.2) * t
-
-        return Color(red: r, green: g, blue: b)
+        return Color.red.opacity(opacity)
     }
 
     func start() {
@@ -975,7 +960,7 @@ struct TimerCardView: View {
                                     cycleClockface()
                                 }
                             }) {
-                                Text("\(timer.effectiveClockface.label) Watchface\(timer.useAutoClockface ? " ⚡" : "")")
+                                Text("\(timer.effectiveClockface.label) Watchface")
                                     .font(.system(size: size * 0.035, weight: .medium))
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, size * 0.04)
