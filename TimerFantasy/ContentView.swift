@@ -17,6 +17,34 @@ struct TimerData: Codable, Identifiable {
     var selectedClockface: String
     var initialSetSeconds: TimeInterval
     var isLooping: Bool
+    var timerColorHex: String?  // Hex string for pie slice color
+}
+
+// MARK: - Color Hex Conversion
+extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let r, g, b: Double
+        switch hex.count {
+        case 6:
+            r = Double((int >> 16) & 0xFF) / 255
+            g = Double((int >> 8) & 0xFF) / 255
+            b = Double(int & 0xFF) / 255
+        default:
+            r = 1; g = 0.5; b = 0  // Default orange
+        }
+        self.init(red: r, green: g, blue: b)
+    }
+
+    var hexString: String {
+        guard let components = NSColor(self).usingColorSpace(.sRGB) else { return "FF8000" }
+        let r = Int(components.redComponent * 255)
+        let g = Int(components.greenComponent * 255)
+        let b = Int(components.blueComponent * 255)
+        return String(format: "%02X%02X%02X", r, g, b)
+    }
 }
 
 // MARK: - Timer Store (iCloud + UserDefaults persistence)
@@ -58,7 +86,8 @@ class TimerStore: ObservableObject {
                 alarmDuration: timer.alarmDuration,
                 selectedClockface: timer.selectedClockface.rawValue,
                 initialSetSeconds: timer.initialSetSeconds,
-                isLooping: timer.isLooping
+                isLooping: timer.isLooping,
+                timerColorHex: timer.timerColor.hexString
             )
         }
 
@@ -91,6 +120,9 @@ class TimerStore: ObservableObject {
             timer.selectedClockface = ClockfaceScale(rawValue: data.selectedClockface) ?? .minutes60
             timer.initialSetSeconds = data.initialSetSeconds
             timer.isLooping = data.isLooping
+            if let hex = data.timerColorHex {
+                timer.timerColor = Color(hex: hex)
+            }
 
             // Restore running timer based on endTime
             if timer.timerState == .running, let endTime = data.endTime {
@@ -141,6 +173,7 @@ class TimerModel: ObservableObject, Identifiable {
     @Published var initialSetSeconds: TimeInterval = 0  // Time originally set when started
     @Published var isAlarmRinging: Bool = false  // True while sound is playing
     @Published var isLooping: Bool = false  // Auto-restart when timer ends
+    @Published var timerColor: Color = .orange  // Pie slice color
 
     enum TimerState: String { case idle, running, paused, alarming }
 
@@ -157,11 +190,11 @@ class TimerModel: ObservableObject, Identifiable {
         let h = total / 3600
         let m = (total % 3600) / 60
         let s = total % 60
-        var parts: [String] = []
-        if h > 0 { parts.append("\(h)h") }
-        if m > 0 { parts.append("\(m)m") }
-        if s > 0 || parts.isEmpty { parts.append("\(s)s") }
-        return parts.joined(separator: "")
+        if h > 0 {
+            return String(format: "%d:%02d:%02d", h, m, s)
+        } else {
+            return String(format: "%d:%02d", m, s)
+        }
     }
 
     func start() {
@@ -746,6 +779,7 @@ struct TimerCardView: View {
                         AnalogTimerView(
                             remainingSeconds: timer.timeRemaining,
                             clockfaceSeconds: timer.selectedClockface.seconds,
+                            pieColor: timer.timerColor,
                             onSetTime: { seconds in
                                 timer.timeRemaining = max(1, seconds)
                                 timer.endTime = Date().addingTimeInterval(seconds)
@@ -816,7 +850,7 @@ struct TimerCardView: View {
                 }
             }
 
-            // Top row: clockface toggle and label (left) - only when running/paused
+            // Top row: clockface toggle and label (left), color picker (right) - only when running/paused
             if timer.timerState == .running || timer.timerState == .paused {
                 VStack {
                     HStack {
@@ -840,6 +874,10 @@ struct TimerCardView: View {
                                 .padding(.leading, size * 0.02)
                         }
                         Spacer()
+                        // Color picker - top right
+                        ColorPicker("", selection: $timer.timerColor, supportsOpacity: false)
+                            .labelsHidden()
+                            .frame(width: size * 0.08, height: size * 0.08)
                     }
                     Spacer()
                 }
@@ -1191,6 +1229,7 @@ struct CircleButton: View {
 struct AnalogTimerView: View {
     var remainingSeconds: Double
     var clockfaceSeconds: Double  // Clock face scale in seconds
+    var pieColor: Color = .orange  // Color of the pie slice
     var onSetTime: ((Double) -> Void)? = nil  // Callback when user clicks to set time
 
     private var clockMaxSeconds: Double {
@@ -1300,7 +1339,7 @@ struct AnalogTimerView: View {
                     }
                 }
 
-                // Red pie (remaining time) - shrinks CW from 12 o'clock (on top of ticks)
+                // Pie (remaining time) - shrinks CW from 12 o'clock (on top of ticks)
                 if remainingSeconds > 0 {
                     let angle = (remainingSeconds / clockMaxSeconds) * 360
                     PieSlice(
@@ -1308,7 +1347,7 @@ struct AnalogTimerView: View {
                         endAngle: .degrees(-90 - angle),
                         clockwise: true
                     )
-                    .fill(Color.orange)
+                    .fill(pieColor)
                     .frame(width: size * 0.65, height: size * 0.65)
                 }
 
