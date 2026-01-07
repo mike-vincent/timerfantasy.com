@@ -157,11 +157,11 @@ class TimerModel: ObservableObject, Identifiable {
         let h = total / 3600
         let m = (total % 3600) / 60
         let s = total % 60
-        if h > 0 {
-            return String(format: "%d:%02d:%02d", h, m, s)
-        } else {
-            return String(format: "%d:%02d", m, s)
-        }
+        var parts: [String] = []
+        if h > 0 { parts.append("\(h)h") }
+        if m > 0 { parts.append("\(m)m") }
+        if s > 0 || parts.isEmpty { parts.append("\(s)s") }
+        return parts.joined(separator: "")
     }
 
     func start() {
@@ -753,23 +753,19 @@ struct TimerCardView: View {
                         )
                         .frame(width: clockSize, height: clockSize)
 
-                        // Initial set time and countdown - below center dot
-                        VStack(spacing: 0) {
-                            Text(timer.initialTimeFormatted)
-                                .font(.system(size: clockSize * 0.07, weight: .medium))
-                                .foregroundStyle(.black.opacity(0.5))
-                            Text(formatDuration(timer.timeRemaining))
-                                .font(.system(size: clockSize * 0.07, weight: .bold))
-                                .foregroundStyle(.black)
-                        }
-                        .offset(y: clockSize * 0.12)
+                        // Initial set time - inside clock face
+                        Text(timer.initialTimeFormatted)
+                            .font(.system(size: clockSize * 0.07, weight: .medium))
+                            .foregroundStyle(.black.opacity(0.5))
+                            .offset(y: clockSize * 0.12)
 
-                        // End time with bell icon and label - hung below clock
-                        VStack(spacing: size * 0.01) {
+                        // Bell and countdown - hung below clock
+                        VStack(spacing: size * 0.015) {
+                            // Bell with end time
                             Menu {
-                                Menu("Sound: \(timer.selectedAlarmSound)") {
+                                Section("Sound") {
                                     ForEach(alarmSounds, id: \.self) { sound in
-                                        Button(sound) {
+                                        Button {
                                             timer.selectedAlarmSound = sound
                                             if sound != "No Sound" {
                                                 let soundName = sound.replacingOccurrences(of: " (Default)", with: "")
@@ -777,13 +773,25 @@ struct TimerCardView: View {
                                                     s.play()
                                                 }
                                             }
+                                        } label: {
+                                            if timer.selectedAlarmSound == sound {
+                                                Label(sound, systemImage: "checkmark")
+                                            } else {
+                                                Text(sound)
+                                            }
                                         }
                                     }
                                 }
-                                Menu("Duration: \(timer.alarmDuration)s") {
+                                Section("Duration") {
                                     ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
-                                        Button("\(seconds)s") {
+                                        Button {
                                             timer.alarmDuration = seconds
+                                        } label: {
+                                            if timer.alarmDuration == seconds {
+                                                Label("\(seconds)s", systemImage: "checkmark")
+                                            } else {
+                                                Text("\(seconds)s")
+                                            }
                                         }
                                     }
                                 }
@@ -798,35 +806,39 @@ struct TimerCardView: View {
                             }
                             .menuStyle(.borderlessButton)
 
-                            TextField("Timer", text: $timer.timerLabel)
-                                .font(.system(size: size * 0.035, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.7))
-                                .multilineTextAlignment(.center)
-                                .textFieldStyle(.plain)
-                                .frame(width: size * 0.5)
-                                .focusEffectDisabled()
-                                .tint(.white)
+                            // Countdown
+                            Text(formatDuration(timer.timeRemaining))
+                                .font(.system(size: size * 0.06, weight: .bold))
+                                .foregroundStyle(.white)
                         }
-                        .offset(y: clockSize * 0.58)
+                        .offset(y: clockSize * 0.65)
                     }
                 }
             }
 
-            // Top row: clockface toggle (left) - only when running/paused
+            // Top row: clockface toggle and label (left) - only when running/paused
             if timer.timerState == .running || timer.timerState == .paused {
                 VStack {
                     HStack {
-                        // Clockface toggle - top left
-                        Button(action: cycleClockface) {
-                            Text("\(timer.selectedClockface.label) Watchface")
+                        // Clockface toggle and label - top left, stacked
+                        VStack(alignment: .leading, spacing: size * 0.01) {
+                            Button(action: cycleClockface) {
+                                Text("\(timer.selectedClockface.label) Watchface")
+                                    .font(.system(size: size * 0.035, weight: .medium))
+                                    .foregroundStyle(.white)
+                                    .padding(.horizontal, size * 0.04)
+                                    .padding(.vertical, size * 0.02)
+                                    .background(Color.gray.opacity(0.3))
+                                    .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+
+                            TextField("Timer", text: $timer.timerLabel)
                                 .font(.system(size: size * 0.035, weight: .medium))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, size * 0.04)
-                                .padding(.vertical, size * 0.02)
-                                .background(Color.gray.opacity(0.3))
-                                .clipShape(Capsule())
+                                .foregroundStyle(.white.opacity(0.7))
+                                .textFieldStyle(.plain)
+                                .padding(.leading, size * 0.02)
                         }
-                        .buttonStyle(.plain)
                         Spacer()
                     }
                     Spacer()
