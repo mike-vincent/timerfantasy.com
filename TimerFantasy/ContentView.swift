@@ -592,6 +592,24 @@ struct TimerCardView: View {
         return formatter.string(from: end)
     }
 
+    func copyTimerAsMarkdown() {
+        var md = "## \(timer.timerLabel)\n\n"
+        md += "- **Duration:** \(timer.initialTimeFormatted)\n"
+        md += "- **Remaining:** \(formatDuration(timer.timeRemaining))\n"
+        if let end = timer.endTime {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "h:mm a"
+            md += "- **Ends at:** \(formatter.string(from: end))\n"
+        }
+        md += "- **Status:** \(timer.timerState == .running ? "Running" : "Paused")\n"
+        if timer.isLooping {
+            md += "- **Looping:** Yes\n"
+        }
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(md, forType: .string)
+    }
+
     func setTimeFromSeconds(_ seconds: Double) {
         timer.timeRemaining = max(1, seconds)
         let total = Int(seconds)
@@ -939,19 +957,39 @@ struct TimerCardView: View {
         .background(Color(white: 0.1))
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .overlay(alignment: .topTrailing) {
-            // Glass + button top right of each card
-            if let onAdd = onAdd {
-                Button(action: onAdd) {
-                    Image(systemName: "plus")
-                        .font(.system(size: size * 0.06, weight: .medium))
-                        .foregroundStyle(.white)
-                        .frame(width: size * 0.12, height: size * 0.12)
-                        .background(.ultraThinMaterial)
-                        .clipShape(Circle())
+            // Top right buttons: menu and add
+            HStack(spacing: size * 0.02) {
+                // Menu button (only when running/paused)
+                if timer.timerState == .running || timer.timerState == .paused {
+                    Menu {
+                        Button(action: { copyTimerAsMarkdown() }) {
+                            Label("Copy as Markdown", systemImage: "doc.on.doc")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: size * 0.05, weight: .medium))
+                            .foregroundStyle(.white)
+                            .frame(width: size * 0.12, height: size * 0.12)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                    }
+                    .menuStyle(.borderlessButton)
                 }
-                .buttonStyle(.plain)
-                .padding(size * 0.03)
+
+                // Add button
+                if let onAdd = onAdd {
+                    Button(action: onAdd) {
+                        Image(systemName: "plus")
+                            .font(.system(size: size * 0.06, weight: .medium))
+                            .foregroundStyle(.white)
+                            .frame(width: size * 0.12, height: size * 0.12)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+            .padding(size * 0.03)
         }
         .clipped()
         .contentShape(Rectangle())
