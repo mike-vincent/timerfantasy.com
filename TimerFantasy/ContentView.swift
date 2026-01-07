@@ -297,6 +297,7 @@ enum ClockfaceScale: String, CaseIterable {
 struct ContentView: View {
     @State private var timers: [TimerModel] = []
     @State private var saveTimer: AnyCancellable?
+    @State private var draggingTimer: TimerModel?
     let globalTimer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
 
     private let spacing: CGFloat = 8
@@ -359,7 +360,8 @@ struct ContentView: View {
                         ForEach(0..<actualCols, id: \.self) { col in
                             let index = row * actualCols + col
                             if index < timers.count {
-                                TimerCardView(timer: timers[index], compact: true, size: cardSize, onDelete: timers.count > 1 ? {
+                                let timer = timers[index]
+                                TimerCardView(timer: timer, compact: true, size: cardSize, onDelete: timers.count > 1 ? {
                                     _ = withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                         timers.remove(at: index)
                                     }
@@ -372,6 +374,17 @@ struct ContentView: View {
                                 })
                                 .frame(width: cardSize, height: cardSize)
                                 .transition(.scale.combined(with: .opacity))
+                                .opacity(draggingTimer?.id == timer.id ? 0.5 : 1)
+                                .onDrag {
+                                    draggingTimer = timer
+                                    return NSItemProvider(object: timer.id.uuidString as NSString)
+                                }
+                                .onDrop(of: [.text], delegate: TimerDropDelegate(
+                                    timer: timer,
+                                    timers: $timers,
+                                    draggingTimer: $draggingTimer,
+                                    onReorder: saveTimers
+                                ))
                             } else {
                                 // Invisible placeholder to complete the row
                                 Color.clear
@@ -400,6 +413,35 @@ struct ContentView: View {
             // Save periodically (every update cycle)
             saveTimers()
         }
+    }
+}
+
+// MARK: - Timer Drop Delegate
+struct TimerDropDelegate: DropDelegate {
+    let timer: TimerModel
+    @Binding var timers: [TimerModel]
+    @Binding var draggingTimer: TimerModel?
+    let onReorder: () -> Void
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggingTimer = nil
+        return true
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let dragging = draggingTimer,
+              dragging.id != timer.id,
+              let fromIndex = timers.firstIndex(where: { $0.id == dragging.id }),
+              let toIndex = timers.firstIndex(where: { $0.id == timer.id }) else { return }
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            timers.move(fromOffsets: IndexSet(integer: fromIndex), toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex)
+        }
+        onReorder()
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
     }
 }
 
@@ -466,6 +508,9 @@ struct TimerCardView: View {
     @State private var showDeleteConfirmation = false
     @State private var showCancelConfirmation = false
     @State private var labelBeforeEdit: String = ""
+    @State private var showEndAtPicker = false
+    @State private var selectedEndTime = Date()
+    @State private var isEditingLabel = false
 
     enum TimeField: Hashable {
         case hours, minutes, seconds, label
@@ -556,52 +601,103 @@ struct TimerCardView: View {
                             .focused($focusedField, equals: .seconds)
                     }
 
-                    // Duration and Sound pickers - stacked vertically
-                    VStack(spacing: size * 0.01) {
-                        // Duration picker (1-60 seconds)
+                    // Options - compact pills
+                    HStack(spacing: size * 0.02) {
+                        // Combined Sound & Duration menu
                         Menu {
-                            ForEach(1...60, id: \.self) { seconds in
-                                Button(seconds == 5 ? "5s (Default)" : "\(seconds)s") {
-                                    timer.alarmDuration = seconds
+                            Menu("Sound: \(timer.selectedAlarmSound.replacingOccurrences(of: " (Default)", with: ""))") {
+                                ForEach(alarmSounds, id: \.self) { sound in
+                                    Button(sound) {
+                                        timer.selectedAlarmSound = sound
+                                        if sound != "No Sound" {
+                                            let soundName = sound.replacingOccurrences(of: " (Default)", with: "")
+                                            if let s = NSSound(named: NSSound.Name(soundName)) {
+                                                s.play()
+                                            }
+                                        }
+                                    }
                                 }
                             }
-                        } label: {
-                            Text(timer.alarmDuration == 5 ? "5s (Default)" : "\(timer.alarmDuration)s")
-                                .font(.system(size: buttonFontSize, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.8))
-                        }
-                        .menuStyle(.borderlessButton)
-
-                        // Sound picker
-                        Menu {
-                            ForEach(alarmSounds, id: \.self) { sound in
-                                Button(sound) {
-                                    timer.selectedAlarmSound = sound
-                                    // Preview sound
-                                    let soundName = sound.replacingOccurrences(of: " (Default)", with: "")
-                                    if let s = NSSound(named: NSSound.Name(soundName)) {
-                                        s.play()
+                            Menu("Duration: \(timer.alarmDuration)s") {
+                                ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
+                                    Button("\(seconds)s") {
+                                        timer.alarmDuration = seconds
                                     }
                                 }
                             }
                         } label: {
-                            Text(timer.selectedAlarmSound)
-                                .font(.system(size: buttonFontSize, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.8))
+                            HStack(spacing: size * 0.008) {
+                                Image(systemName: timer.selectedAlarmSound == "No Sound" ? "speaker.slash" : "speaker.wave.2")
+                                    .font(.system(size: buttonFontSize * 0.8))
+                                Text("Alarm")
+                                    .font(.system(size: buttonFontSize * 0.85, weight: .regular))
+                            }
+                            .foregroundStyle(.white.opacity(0.6))
+                            .padding(.horizontal, size * 0.025)
+                            .padding(.vertical, size * 0.012)
+                            .background(Color.white.opacity(0.08))
+                            .clipShape(Capsule())
                         }
                         .menuStyle(.borderlessButton)
 
                         // Loop toggle
                         Button(action: { timer.isLooping.toggle() }) {
-                            HStack(spacing: size * 0.01) {
-                                Image(systemName: timer.isLooping ? "repeat.circle.fill" : "repeat.circle")
-                                    .font(.system(size: buttonFontSize * 1.2))
-                                Text(timer.isLooping ? "Loop On" : "Loop")
-                                    .font(.system(size: buttonFontSize, weight: .medium))
+                            HStack(spacing: size * 0.008) {
+                                Image(systemName: "repeat")
+                                    .font(.system(size: buttonFontSize * 0.8))
+                                Text("Loop")
+                                    .font(.system(size: buttonFontSize * 0.85, weight: .regular))
                             }
-                            .foregroundStyle(timer.isLooping ? .orange : .white.opacity(0.8))
+                            .foregroundStyle(timer.isLooping ? .orange : .white.opacity(0.6))
+                            .padding(.horizontal, size * 0.025)
+                            .padding(.vertical, size * 0.012)
+                            .background(timer.isLooping ? Color.orange.opacity(0.2) : Color.white.opacity(0.08))
+                            .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
+
+                        // End At picker
+                        Button(action: {
+                            selectedEndTime = Date().addingTimeInterval(3600)
+                            showEndAtPicker = true
+                        }) {
+                            HStack(spacing: size * 0.008) {
+                                Image(systemName: "clock")
+                                    .font(.system(size: buttonFontSize * 0.8))
+                                Text("End At")
+                                    .font(.system(size: buttonFontSize * 0.85, weight: .regular))
+                            }
+                            .foregroundStyle(.white.opacity(0.6))
+                            .padding(.horizontal, size * 0.025)
+                            .padding(.vertical, size * 0.012)
+                            .background(Color.white.opacity(0.08))
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .popover(isPresented: $showEndAtPicker) {
+                            VStack(spacing: 12) {
+                                Text("End At")
+                                    .font(.headline)
+                                DatePicker("", selection: $selectedEndTime, displayedComponents: .hourAndMinute)
+                                    .datePickerStyle(.stepperField)
+                                    .labelsHidden()
+                                Button("Set") {
+                                    let duration = selectedEndTime.timeIntervalSinceNow
+                                    if duration > 0 {
+                                        let total = Int(duration)
+                                        timer.selectedHours = total / 3600
+                                        timer.selectedMinutes = (total % 3600) / 60
+                                        timer.selectedSeconds = total % 60
+                                    }
+                                    showEndAtPicker = false
+                                    focusedField = nil
+                                    NSApp.keyWindow?.makeFirstResponder(nil)
+                                }
+                                .buttonStyle(.borderedProminent)
+                            }
+                            .padding()
+                            .frame(width: 200)
+                        }
                     }
                 } else if timer.timerState == .alarming {
                     // Alarming: show bell with end time below, tap to dismiss
@@ -702,7 +798,7 @@ struct TimerCardView: View {
                             }
                             .menuStyle(.borderlessButton)
 
-                            TextField("", text: $timer.timerLabel)
+                            TextField("Timer", text: $timer.timerLabel)
                                 .font(.system(size: size * 0.035, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.7))
                                 .multilineTextAlignment(.center)
@@ -710,15 +806,6 @@ struct TimerCardView: View {
                                 .frame(width: size * 0.5)
                                 .focusEffectDisabled()
                                 .tint(.white)
-                                .focused($focusedField, equals: .label)
-                                .onChange(of: focusedField) { _, newValue in
-                                    if newValue == .label {
-                                        labelBeforeEdit = timer.timerLabel
-                                        timer.timerLabel = ""
-                                    } else if newValue != .label && timer.timerLabel.isEmpty {
-                                        timer.timerLabel = labelBeforeEdit.isEmpty ? "Timer" : labelBeforeEdit
-                                    }
-                                }
                         }
                         .offset(y: clockSize * 0.58)
                     }
@@ -788,14 +875,12 @@ struct TimerCardView: View {
                     Button("Delete", role: .destructive) {
                         onDelete?()
                     }
-                    .keyboardShortcut(.defaultAction)
                     Button("Keep", role: .cancel) {}
                 }
                 .confirmationDialog("Cancel Timer?", isPresented: $showCancelConfirmation) {
                     Button("Cancel Timer", role: .destructive) {
                         timer.cancel()
                     }
-                    .keyboardShortcut(.defaultAction)
                     Button("Keep Running", role: .cancel) {}
                 }
             }
