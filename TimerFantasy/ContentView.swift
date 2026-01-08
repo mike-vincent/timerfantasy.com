@@ -620,8 +620,9 @@ struct TimerCardView: View {
 
     var rightButtonColor: Color {
         switch timer.timerState {
-        case .idle, .paused: return .blue
-        case .running, .alarming: return .orange
+        case .idle, .paused: return .green
+        case .running: return .blue
+        case .alarming: return .red
         }
     }
 
@@ -733,58 +734,57 @@ struct TimerCardView: View {
                             .focused($focusedField, equals: .seconds)
                     }
 
-                    // Options - compact pills
+                    // Options - compact circles in row
                     HStack(spacing: size * 0.02) {
-                        // Combined Sound & Duration menu
+                        let circleSize = size * 0.10
+
+                        // Sound picker
                         Menu {
-                            Menu("Sound: \(timer.selectedAlarmSound.replacingOccurrences(of: " (Default)", with: ""))") {
-                                ForEach(alarmSounds, id: \.self) { sound in
-                                    Button(sound) {
-                                        timer.selectedAlarmSound = sound
-                                        if sound != "No Sound" {
-                                            let soundName = sound.replacingOccurrences(of: " (Default)", with: "")
-                                            if let s = NSSound(named: NSSound.Name(soundName)) {
-                                                s.play()
-                                            }
+                            ForEach(alarmSounds, id: \.self) { sound in
+                                Button(sound) {
+                                    timer.selectedAlarmSound = sound
+                                    if sound != "No Sound" {
+                                        let soundName = sound.replacingOccurrences(of: " (Default)", with: "")
+                                        if let s = NSSound(named: NSSound.Name(soundName)) {
+                                            s.play()
                                         }
                                     }
                                 }
                             }
-                            Menu("Duration: \(timer.alarmDuration)s") {
-                                ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
-                                    Button("\(seconds)s") {
-                                        timer.alarmDuration = seconds
-                                    }
+                        } label: {
+                            Image(systemName: timer.selectedAlarmSound == "No Sound" ? "speaker.slash" : "speaker.wave.2")
+                                .font(.system(size: size * 0.04))
+                                .foregroundStyle(.white.opacity(0.7))
+                                .frame(width: circleSize, height: circleSize)
+                                .background(Circle().fill(Color(white: 0.2)))
+                        }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+
+                        // Duration picker
+                        Menu {
+                            ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
+                                Button("\(seconds)s") {
+                                    timer.alarmDuration = seconds
                                 }
                             }
                         } label: {
-                            HStack(spacing: size * 0.008) {
-                                Image(systemName: timer.selectedAlarmSound == "No Sound" ? "speaker.slash" : "speaker.wave.2")
-                                    .font(.system(size: buttonFontSize * 0.8))
-                                Text("Alarm")
-                                    .font(.system(size: buttonFontSize * 0.85, weight: .regular))
-                            }
-                            .foregroundStyle(.white.opacity(0.6))
-                            .padding(.horizontal, size * 0.025)
-                            .padding(.vertical, size * 0.012)
-                            .background(Color.white.opacity(0.08))
-                            .clipShape(Capsule())
+                            Text("\(timer.alarmDuration)s")
+                                .font(.system(size: size * 0.04, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.7))
+                                .frame(width: circleSize, height: circleSize)
+                                .background(Circle().fill(Color(white: 0.2)))
                         }
                         .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
 
                         // Loop toggle
                         Button(action: { timer.isLooping.toggle() }) {
-                            HStack(spacing: size * 0.008) {
-                                Image(systemName: "repeat")
-                                    .font(.system(size: buttonFontSize * 0.8))
-                                Text("Loop")
-                                    .font(.system(size: buttonFontSize * 0.85, weight: .regular))
-                            }
-                            .foregroundStyle(timer.isLooping ? .orange : .white.opacity(0.6))
-                            .padding(.horizontal, size * 0.025)
-                            .padding(.vertical, size * 0.012)
-                            .background(timer.isLooping ? Color.orange.opacity(0.2) : Color.white.opacity(0.08))
-                            .clipShape(Capsule())
+                            Image(systemName: "repeat")
+                                .font(.system(size: size * 0.04))
+                                .foregroundStyle(timer.isLooping ? .red : .white.opacity(0.7))
+                                .frame(width: circleSize, height: circleSize)
+                                .background(Circle().fill(timer.isLooping ? Color.red.opacity(0.2) : Color(white: 0.2)))
                         }
                         .buttonStyle(.plain)
 
@@ -793,17 +793,11 @@ struct TimerCardView: View {
                             selectedEndTime = Date().addingTimeInterval(3600)
                             showEndAtPicker = true
                         }) {
-                            HStack(spacing: size * 0.008) {
-                                Image(systemName: "clock")
-                                    .font(.system(size: buttonFontSize * 0.8))
-                                Text("End At")
-                                    .font(.system(size: buttonFontSize * 0.85, weight: .regular))
-                            }
-                            .foregroundStyle(.white.opacity(0.6))
-                            .padding(.horizontal, size * 0.025)
-                            .padding(.vertical, size * 0.012)
-                            .background(Color.white.opacity(0.08))
-                            .clipShape(Capsule())
+                            Image(systemName: "clock")
+                                .font(.system(size: size * 0.04))
+                                .foregroundStyle(.white.opacity(0.7))
+                                .frame(width: circleSize, height: circleSize)
+                                .background(Circle().fill(Color(white: 0.2)))
                         }
                         .buttonStyle(.plain)
                         .popover(isPresented: $showEndAtPicker) {
@@ -836,7 +830,7 @@ struct TimerCardView: View {
                     VStack(spacing: size * 0.02) {
                         Image(systemName: "bell.fill")
                             .font(.system(size: size * 0.3))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.red)
                             .symbolEffect(.pulse, options: .repeating, isActive: timer.isAlarmRinging)
 
                         // End time hung below bell
@@ -861,10 +855,10 @@ struct TimerCardView: View {
                                 Text("Repeat")
                                     .font(.system(size: size * 0.04, weight: .medium))
                             }
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.red)
                             .padding(.horizontal, size * 0.04)
                             .padding(.vertical, size * 0.02)
-                            .background(Color.orange.opacity(0.2))
+                            .background(Color.red.opacity(0.2))
                             .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
@@ -892,13 +886,30 @@ struct TimerCardView: View {
                             .foregroundStyle(.black.opacity(0.5))
                             .offset(y: clockSize * 0.12)
 
-                        // Bell and countdown - hung below clock
-                        VStack(spacing: size * 0.015) {
+                        // Bell, countdown, and controls - hung below clock
+                        VStack(spacing: size * 0.025) {
                             // Bell with end time
-                            Menu {
-                                Section("Sound") {
+                            HStack(spacing: size * 0.015) {
+                                Image(systemName: timer.selectedAlarmSound == "No Sound" ? "bell.slash.fill" : "bell.fill")
+                                    .font(.system(size: size * 0.03))
+                                Text(getEndTimeString())
+                                    .font(.system(size: size * 0.04, weight: .medium))
+                            }
+                            .foregroundStyle(.white.opacity(0.5))
+
+                            // Countdown
+                            Text(formatDuration(timer.timeRemaining))
+                                .font(.system(size: size * 0.08, weight: .bold))
+                                .foregroundStyle(.white)
+
+                            // Sound, Duration, Loop controls
+                            HStack(spacing: size * 0.04) {
+                                let circleSize = size * 0.10
+
+                                // Sound picker
+                                Menu {
                                     ForEach(alarmSounds, id: \.self) { sound in
-                                        Button {
+                                        Button(sound) {
                                             timer.selectedAlarmSound = sound
                                             if sound != "No Sound" {
                                                 let soundName = sound.replacingOccurrences(of: " (Default)", with: "")
@@ -906,45 +917,47 @@ struct TimerCardView: View {
                                                     s.play()
                                                 }
                                             }
-                                        } label: {
-                                            if timer.selectedAlarmSound == sound {
-                                                Label(sound, systemImage: "checkmark")
-                                            } else {
-                                                Text(sound)
-                                            }
                                         }
                                     }
+                                } label: {
+                                    Image(systemName: timer.selectedAlarmSound == "No Sound" ? "speaker.slash" : "speaker.wave.2")
+                                        .font(.system(size: size * 0.045))
+                                        .foregroundStyle(.white.opacity(0.7))
+                                        .frame(width: circleSize, height: circleSize)
+                                        .background(Circle().fill(Color(white: 0.2)))
                                 }
-                                Section("Duration") {
-                                    ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
-                                        Button {
-                                            timer.alarmDuration = seconds
-                                        } label: {
-                                            if timer.alarmDuration == seconds {
-                                                Label("\(seconds)s", systemImage: "checkmark")
-                                            } else {
-                                                Text("\(seconds)s")
-                                            }
-                                        }
-                                    }
-                                }
-                            } label: {
-                                HStack(spacing: size * 0.01) {
-                                    Image(systemName: timer.selectedAlarmSound == "No Sound" ? "bell.slash.fill" : "bell.fill")
-                                        .font(.system(size: size * 0.025))
-                                    Text(getEndTimeString())
-                                        .font(.system(size: size * 0.035, weight: .medium))
-                                }
-                                .foregroundStyle(.white.opacity(0.5))
-                            }
-                            .menuStyle(.borderlessButton)
+                                .menuStyle(.borderlessButton)
+                                .menuIndicator(.hidden)
 
-                            // Countdown
-                            Text(formatDuration(timer.timeRemaining))
-                                .font(.system(size: size * 0.06, weight: .bold))
-                                .foregroundStyle(.white)
+                                // Duration picker
+                                Menu {
+                                    ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
+                                        Button("\(seconds)s") {
+                                            timer.alarmDuration = seconds
+                                        }
+                                    }
+                                } label: {
+                                    Text("\(timer.alarmDuration)s")
+                                        .font(.system(size: size * 0.042, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.7))
+                                        .frame(width: circleSize, height: circleSize)
+                                        .background(Circle().fill(Color(white: 0.2)))
+                                }
+                                .menuStyle(.borderlessButton)
+                                .menuIndicator(.hidden)
+
+                                // Loop toggle
+                                Button(action: { timer.isLooping.toggle() }) {
+                                    Image(systemName: "repeat")
+                                        .font(.system(size: size * 0.045))
+                                        .foregroundStyle(timer.isLooping ? .red : .white.opacity(0.7))
+                                        .frame(width: circleSize, height: circleSize)
+                                        .background(Circle().fill(timer.isLooping ? Color.red.opacity(0.2) : Color(white: 0.2)))
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
-                        .offset(y: clockSize * 0.65)
+                        .offset(y: clockSize * 0.62)
                     }
                 }
             }
@@ -965,16 +978,20 @@ struct TimerCardView: View {
                                     .foregroundStyle(.white)
                                     .padding(.horizontal, size * 0.04)
                                     .padding(.vertical, size * 0.02)
-                                    .background(Color.gray.opacity(0.3))
+                                    .background(Color(white: 0.2))
                                     .clipShape(Capsule())
                             }
                             .buttonStyle(.plain)
 
                             TextField("Timer", text: $timer.timerLabel)
                                 .font(.system(size: size * 0.035, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.7))
+                                .foregroundStyle(.white.opacity(0.8))
                                 .textFieldStyle(.plain)
-                                .padding(.leading, size * 0.02)
+                                .frame(width: size * 0.35)
+                                .padding(.horizontal, size * 0.04)
+                                .padding(.vertical, size * 0.02)
+                                .background(Color(white: 0.2))
+                                .clipShape(Capsule())
                         }
                         Spacer()
                     }
@@ -997,9 +1014,9 @@ struct TimerCardView: View {
                         }) {
                             Text(timer.timerState == .idle ? "Delete" : "Cancel")
                                 .font(.system(size: buttonFontSize, weight: .medium))
-                                .foregroundStyle(timer.timerState == .idle && onDelete == nil ? .gray : .white)
+                                .foregroundStyle(timer.timerState == .idle && onDelete == nil ? .gray : .red)
                                 .frame(width: buttonWidth, height: buttonHeight)
-                                .background(Color(white: 0.2))
+                                .background(Color.red.opacity(timer.timerState == .idle && onDelete == nil ? 0.1 : 0.3))
                                 .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
@@ -1021,13 +1038,13 @@ struct TimerCardView: View {
                 }
                 .padding(padding)
                 .confirmationDialog("Delete Timer?", isPresented: $showDeleteConfirmation) {
-                    Button("Delete", role: .destructive) {
+                    Button("Delete") {
                         onDelete?()
                     }
                     Button("Keep", role: .cancel) {}
                 }
                 .confirmationDialog("Cancel Timer?", isPresented: $showCancelConfirmation) {
-                    Button("Cancel Timer", role: .destructive) {
+                    Button("Cancel Timer") {
                         timer.cancel()
                     }
                     Button("Keep Running", role: .cancel) {}
@@ -1058,24 +1075,27 @@ struct TimerCardView: View {
                                 Label("Flash Warning", systemImage: timer.useFlashWarning ? "checkmark.circle.fill" : "circle")
                             }
                         } label: {
-                            Image(systemName: "ellipsis")
-                                .font(.system(size: size * 0.05, weight: .medium))
-                                .foregroundStyle(.white)
-                                .frame(width: size * 0.12, height: size * 0.12)
-                                .background(.ultraThinMaterial)
-                                .clipShape(Circle())
+                            ZStack {
+                                Circle()
+                                    .fill(Color(white: 0.2))
+                                    .frame(width: size * 0.10, height: size * 0.10)
+                                Image(systemName: "ellipsis")
+                                    .font(.system(size: size * 0.04, weight: .medium))
+                                    .foregroundStyle(.white)
+                            }
                         }
                         .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
                     }
 
                     // Add button
                     if let onAdd = onAdd {
                         Button(action: onAdd) {
                             Image(systemName: "plus")
-                                .font(.system(size: size * 0.06, weight: .medium))
+                                .font(.system(size: size * 0.04, weight: .medium))
                                 .foregroundStyle(.white)
-                                .frame(width: size * 0.12, height: size * 0.12)
-                                .background(.ultraThinMaterial)
+                                .frame(width: size * 0.10, height: size * 0.10)
+                                .background(Color(white: 0.2))
                                 .clipShape(Circle())
                         }
                         .buttonStyle(.plain)
@@ -1121,7 +1141,7 @@ struct TimeDigitField: View {
         ZStack {
             // Background - always present, orange when focused
             RoundedRectangle(cornerRadius: size * 0.07, style: .continuous)
-                .fill(isFocused ? Color.orange : Color.clear)
+                .fill(isFocused ? Color.green : Color.clear)
                 .frame(width: fieldWidth, height: fieldHeight)
 
             TextField("", text: $textValue)
