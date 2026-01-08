@@ -739,7 +739,15 @@ struct TimerCardView: View {
                         let circleSize = size * 0.10
 
                         // Sound picker
-                        Menu {
+                        Button(action: {}) {
+                            Image(systemName: timer.selectedAlarmSound == "No Sound" ? "speaker.slash" : "speaker.fill")
+                                .font(.system(size: size * 0.04))
+                                .foregroundStyle(.white.opacity(0.7))
+                                .frame(width: circleSize, height: circleSize)
+                                .background(Circle().fill(Color(white: 0.2)))
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
                             ForEach(alarmSounds, id: \.self) { sound in
                                 Button(sound) {
                                     timer.selectedAlarmSound = sound
@@ -751,32 +759,24 @@ struct TimerCardView: View {
                                     }
                                 }
                             }
-                        } label: {
-                            Image(systemName: timer.selectedAlarmSound == "No Sound" ? "speaker.slash" : "speaker.wave.2")
-                                .font(.system(size: size * 0.04))
-                                .foregroundStyle(.white.opacity(0.7))
-                                .frame(width: circleSize, height: circleSize)
-                                .background(Circle().fill(Color(white: 0.2)))
                         }
-                        .menuStyle(.borderlessButton)
-                        .menuIndicator(.hidden)
 
                         // Duration picker
-                        Menu {
-                            ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
-                                Button("\(seconds)s") {
-                                    timer.alarmDuration = seconds
-                                }
-                            }
-                        } label: {
+                        Button(action: {}) {
                             Text("\(timer.alarmDuration)s")
                                 .font(.system(size: size * 0.04, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.7))
                                 .frame(width: circleSize, height: circleSize)
                                 .background(Circle().fill(Color(white: 0.2)))
                         }
-                        .menuStyle(.borderlessButton)
-                        .menuIndicator(.hidden)
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
+                                Button("\(seconds)s") {
+                                    timer.alarmDuration = seconds
+                                }
+                            }
+                        }
 
                         // Loop toggle
                         Button(action: { timer.isLooping.toggle() }) {
@@ -907,7 +907,15 @@ struct TimerCardView: View {
                                 let circleSize = size * 0.10
 
                                 // Sound picker
-                                Menu {
+                                Button(action: {}) {
+                                    Image(systemName: timer.selectedAlarmSound == "No Sound" ? "speaker.slash" : "speaker.fill")
+                                        .font(.system(size: size * 0.045))
+                                        .foregroundStyle(.white.opacity(0.7))
+                                        .frame(width: circleSize, height: circleSize)
+                                        .background(Circle().fill(Color(white: 0.2)))
+                                }
+                                .buttonStyle(.plain)
+                                .contextMenu {
                                     ForEach(alarmSounds, id: \.self) { sound in
                                         Button(sound) {
                                             timer.selectedAlarmSound = sound
@@ -919,32 +927,24 @@ struct TimerCardView: View {
                                             }
                                         }
                                     }
-                                } label: {
-                                    Image(systemName: timer.selectedAlarmSound == "No Sound" ? "speaker.slash" : "speaker.wave.2")
-                                        .font(.system(size: size * 0.045))
-                                        .foregroundStyle(.white.opacity(0.7))
-                                        .frame(width: circleSize, height: circleSize)
-                                        .background(Circle().fill(Color(white: 0.2)))
                                 }
-                                .menuStyle(.borderlessButton)
-                                .menuIndicator(.hidden)
 
                                 // Duration picker
-                                Menu {
-                                    ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
-                                        Button("\(seconds)s") {
-                                            timer.alarmDuration = seconds
-                                        }
-                                    }
-                                } label: {
+                                Button(action: {}) {
                                     Text("\(timer.alarmDuration)s")
                                         .font(.system(size: size * 0.042, weight: .medium))
                                         .foregroundStyle(.white.opacity(0.7))
                                         .frame(width: circleSize, height: circleSize)
                                         .background(Circle().fill(Color(white: 0.2)))
                                 }
-                                .menuStyle(.borderlessButton)
-                                .menuIndicator(.hidden)
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
+                                        Button("\(seconds)s") {
+                                            timer.alarmDuration = seconds
+                                        }
+                                    }
+                                }
 
                                 // Loop toggle
                                 Button(action: { timer.isLooping.toggle() }) {
