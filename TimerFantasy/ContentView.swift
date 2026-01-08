@@ -957,7 +957,7 @@ struct TimerCardView: View {
                                 .buttonStyle(.plain)
                             }
                         }
-                        .offset(y: clockSize * 0.62)
+                        .offset(y: clockSize * 0.75)
                     }
                 }
             }
