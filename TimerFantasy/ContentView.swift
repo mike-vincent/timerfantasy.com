@@ -605,6 +605,10 @@ struct TimerCardView: View {
     @State private var showEndAtPicker = false
     @State private var selectedEndTime = Date()
     @State private var isEditingLabel = false
+    @State private var useEndAtMode = false
+    @State private var endAtHour = 12
+    @State private var endAtMinute = 0
+    @State private var endAtIsPM = false
 
     enum TimeField: Hashable {
         case hours, minutes, seconds, label
@@ -700,6 +704,38 @@ struct TimerCardView: View {
         timer.selectedSeconds = total % 60
     }
 
+    func updateEndAtDuration() {
+        // Convert 12-hour to 24-hour
+        var hour24 = endAtHour
+        if endAtHour == 12 {
+            hour24 = endAtIsPM ? 12 : 0
+        } else {
+            hour24 = endAtIsPM ? endAtHour + 12 : endAtHour
+        }
+
+        // Create target date
+        let calendar = Calendar.current
+        var components = calendar.dateComponents([.year, .month, .day], from: Date())
+        components.hour = hour24
+        components.minute = endAtMinute
+        components.second = 0
+
+        guard var targetDate = calendar.date(from: components) else { return }
+
+        // If target is in the past, assume tomorrow
+        if targetDate <= Date() {
+            targetDate = calendar.date(byAdding: .day, value: 1, to: targetDate) ?? targetDate
+        }
+
+        let duration = targetDate.timeIntervalSinceNow
+        if duration > 0 {
+            let total = Int(duration)
+            timer.selectedHours = total / 3600
+            timer.selectedMinutes = (total % 3600) / 60
+            timer.selectedSeconds = total % 60
+        }
+    }
+
     var body: some View {
         let clockSize = size * 0.5
         let digitFontSize = size * 0.16
@@ -714,24 +750,62 @@ struct TimerCardView: View {
             // Main content centered
             VStack(spacing: size * 0.02) {
                 if timer.timerState == .idle {
-                    // Clickable digits
-                    HStack(spacing: 0) {
-                        TimeDigitField(value: $timer.selectedHours, maxValue: 168, isFocused: focusedField == .hours, size: size * 0.22, onSubmit: { timer.start() })
-                            .focused($focusedField, equals: .hours)
-                        Text(":")
-                            .font(.system(size: digitFontSize, weight: .thin))
-                            .foregroundStyle(.white)
-                            .frame(width: size * 0.05)
-                            .transition(.opacity.combined(with: .scale))
-                        TimeDigitField(value: $timer.selectedMinutes, maxValue: 99, isFocused: focusedField == .minutes, size: size * 0.22, onSubmit: { timer.start() })
-                            .focused($focusedField, equals: .minutes)
-                        Text(":")
-                            .font(.system(size: digitFontSize, weight: .thin))
-                            .foregroundStyle(.white)
-                            .frame(width: size * 0.05)
-                            .transition(.opacity.combined(with: .scale))
-                        TimeDigitField(value: $timer.selectedSeconds, maxValue: 99, isFocused: focusedField == .seconds, size: size * 0.22, onSubmit: { timer.start() })
-                            .focused($focusedField, equals: .seconds)
+                    // Mode toggle
+                    Button(action: { useEndAtMode.toggle() }) {
+                        Text(useEndAtMode ? "End At" : "Duration")
+                            .font(.system(size: size * 0.035, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.8))
+                            .padding(.horizontal, size * 0.04)
+                            .padding(.vertical, size * 0.015)
+                            .background(Color(white: 0.2))
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+
+                    if useEndAtMode {
+                        // End At time input - same digit style
+                        HStack(spacing: 0) {
+                            TimeDigitField(value: $endAtHour, maxValue: 12, isFocused: focusedField == .hours, size: size * 0.22, onSubmit: { timer.start() })
+                                .focused($focusedField, equals: .hours)
+                            Text(":")
+                                .font(.system(size: digitFontSize, weight: .thin))
+                                .foregroundStyle(.white)
+                                .frame(width: size * 0.05)
+                            TimeDigitField(value: $endAtMinute, maxValue: 59, isFocused: focusedField == .minutes, size: size * 0.22, onSubmit: { timer.start() })
+                                .focused($focusedField, equals: .minutes)
+
+                            // AM/PM toggle
+                            Button(action: { endAtIsPM.toggle() }) {
+                                Text(endAtIsPM ? "PM" : "AM")
+                                    .font(.system(size: size * 0.06, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.7))
+                                    .frame(width: size * 0.12)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .onChange(of: endAtHour) { _, _ in updateEndAtDuration() }
+                        .onChange(of: endAtMinute) { _, _ in updateEndAtDuration() }
+                        .onChange(of: endAtIsPM) { _, _ in updateEndAtDuration() }
+                    } else {
+                        // Clickable digits for duration
+                        HStack(spacing: 0) {
+                            TimeDigitField(value: $timer.selectedHours, maxValue: 168, isFocused: focusedField == .hours, size: size * 0.22, onSubmit: { timer.start() })
+                                .focused($focusedField, equals: .hours)
+                            Text(":")
+                                .font(.system(size: digitFontSize, weight: .thin))
+                                .foregroundStyle(.white)
+                                .frame(width: size * 0.05)
+                                .transition(.opacity.combined(with: .scale))
+                            TimeDigitField(value: $timer.selectedMinutes, maxValue: 99, isFocused: focusedField == .minutes, size: size * 0.22, onSubmit: { timer.start() })
+                                .focused($focusedField, equals: .minutes)
+                            Text(":")
+                                .font(.system(size: digitFontSize, weight: .thin))
+                                .foregroundStyle(.white)
+                                .frame(width: size * 0.05)
+                                .transition(.opacity.combined(with: .scale))
+                            TimeDigitField(value: $timer.selectedSeconds, maxValue: 99, isFocused: focusedField == .seconds, size: size * 0.22, onSubmit: { timer.start() })
+                                .focused($focusedField, equals: .seconds)
+                        }
                     }
 
                     // Options - compact circles in row
@@ -787,43 +861,6 @@ struct TimerCardView: View {
                                 .background(Circle().fill(timer.isLooping ? Color.red.opacity(0.2) : Color(white: 0.2)))
                         }
                         .buttonStyle(.plain)
-
-                        // End At picker
-                        Button(action: {
-                            selectedEndTime = Date().addingTimeInterval(3600)
-                            showEndAtPicker = true
-                        }) {
-                            Image(systemName: "clock")
-                                .font(.system(size: size * 0.04))
-                                .foregroundStyle(.white.opacity(0.7))
-                                .frame(width: circleSize, height: circleSize)
-                                .background(Circle().fill(Color(white: 0.2)))
-                        }
-                        .buttonStyle(.plain)
-                        .popover(isPresented: $showEndAtPicker) {
-                            VStack(spacing: 12) {
-                                Text("End At")
-                                    .font(.headline)
-                                DatePicker("", selection: $selectedEndTime, displayedComponents: .hourAndMinute)
-                                    .datePickerStyle(.stepperField)
-                                    .labelsHidden()
-                                Button("Set") {
-                                    let duration = selectedEndTime.timeIntervalSinceNow
-                                    if duration > 0 {
-                                        let total = Int(duration)
-                                        timer.selectedHours = total / 3600
-                                        timer.selectedMinutes = (total % 3600) / 60
-                                        timer.selectedSeconds = total % 60
-                                    }
-                                    showEndAtPicker = false
-                                    focusedField = nil
-                                    NSApp.keyWindow?.makeFirstResponder(nil)
-                                }
-                                .buttonStyle(.borderedProminent)
-                            }
-                            .padding()
-                            .frame(width: 200)
-                        }
                     }
                 } else if timer.timerState == .alarming {
                     // Alarming: show bell with end time below, tap to dismiss
