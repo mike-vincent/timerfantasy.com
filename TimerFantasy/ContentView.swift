@@ -813,15 +813,7 @@ struct TimerCardView: View {
                         let circleSize = size * 0.10
 
                         // Sound picker
-                        Button(action: {}) {
-                            Image(systemName: timer.selectedAlarmSound == "No Sound" ? "speaker.slash" : "speaker.fill")
-                                .font(.system(size: size * 0.04))
-                                .foregroundStyle(.white.opacity(0.7))
-                                .frame(width: circleSize, height: circleSize)
-                                .background(Circle().fill(Color(white: 0.2)))
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
+                        Menu {
                             ForEach(alarmSounds, id: \.self) { sound in
                                 Button(sound) {
                                     timer.selectedAlarmSound = sound
@@ -833,32 +825,47 @@ struct TimerCardView: View {
                                     }
                                 }
                             }
+                        } label: {
+                            let displayName = timer.selectedAlarmSound
+                                .replacingOccurrences(of: " (Default)", with: "")
+                            Text(displayName == "No Sound" ? "Mute" : displayName)
+                                .font(.system(size: size * 0.035, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.7))
+                                .padding(.horizontal, size * 0.025)
+                                .padding(.vertical, size * 0.015)
+                                .background(Capsule().fill(Color(white: 0.2)))
                         }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
 
                         // Duration picker
-                        Button(action: {}) {
-                            Text("\(timer.alarmDuration)s")
-                                .font(.system(size: size * 0.04, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.7))
-                                .frame(width: circleSize, height: circleSize)
-                                .background(Circle().fill(Color(white: 0.2)))
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
+                        Menu {
                             ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
                                 Button("\(seconds)s") {
                                     timer.alarmDuration = seconds
                                 }
                             }
+                        } label: {
+                            ZStack {
+                                Circle().fill(Color(white: 0.2))
+                                    .frame(width: circleSize, height: circleSize)
+                                Text("\(timer.alarmDuration)s")
+                                    .font(.system(size: size * 0.04, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.7))
+                            }
                         }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .frame(width: circleSize, height: circleSize)
 
                         // Loop toggle
                         Button(action: { timer.isLooping.toggle() }) {
-                            Image(systemName: "repeat")
-                                .font(.system(size: size * 0.04))
-                                .foregroundStyle(timer.isLooping ? .red : .white.opacity(0.7))
-                                .frame(width: circleSize, height: circleSize)
-                                .background(Circle().fill(timer.isLooping ? Color.red.opacity(0.2) : Color(white: 0.2)))
+                            Text("Loop")
+                                .font(.system(size: size * 0.035, weight: .medium))
+                                .foregroundStyle(timer.isLooping ? .white : .white.opacity(0.7))
+                                .padding(.horizontal, size * 0.025)
+                                .padding(.vertical, size * 0.015)
+                                .background(Capsule().fill(timer.isLooping ? Color.red : Color(white: 0.2)))
                         }
                         .buttonStyle(.plain)
                     }
@@ -944,15 +951,7 @@ struct TimerCardView: View {
                             let circleSize = size * 0.10
 
                             // Sound picker
-                            Button(action: {}) {
-                                Image(systemName: timer.selectedAlarmSound == "No Sound" ? "speaker.slash" : "speaker.fill")
-                                    .font(.system(size: size * 0.045))
-                                    .foregroundStyle(.white.opacity(0.7))
-                                    .frame(width: circleSize, height: circleSize)
-                                    .background(Circle().fill(Color(white: 0.2)))
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
+                            Menu {
                                 ForEach(alarmSounds, id: \.self) { sound in
                                     Button(sound) {
                                         timer.selectedAlarmSound = sound
@@ -964,32 +963,47 @@ struct TimerCardView: View {
                                         }
                                     }
                                 }
+                            } label: {
+                                let displayName = timer.selectedAlarmSound
+                                    .replacingOccurrences(of: " (Default)", with: "")
+                                Text(displayName == "No Sound" ? "Mute" : displayName)
+                                    .font(.system(size: size * 0.035, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.7))
+                                    .padding(.horizontal, size * 0.025)
+                                    .padding(.vertical, size * 0.015)
+                                    .background(Capsule().fill(Color(white: 0.2)))
                             }
+                            .menuStyle(.borderlessButton)
+                            .menuIndicator(.hidden)
 
                             // Duration picker
-                            Button(action: {}) {
-                                Text("\(timer.alarmDuration)s")
-                                    .font(.system(size: size * 0.042, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.7))
-                                    .frame(width: circleSize, height: circleSize)
-                                    .background(Circle().fill(Color(white: 0.2)))
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
+                            Menu {
                                 ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
                                     Button("\(seconds)s") {
                                         timer.alarmDuration = seconds
                                     }
                                 }
+                            } label: {
+                                ZStack {
+                                    Circle().fill(Color(white: 0.2))
+                                        .frame(width: circleSize, height: circleSize)
+                                    Text("\(timer.alarmDuration)s")
+                                        .font(.system(size: size * 0.042, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.7))
+                                }
                             }
+                            .menuStyle(.borderlessButton)
+                            .menuIndicator(.hidden)
+                            .frame(width: circleSize, height: circleSize)
 
                             // Loop toggle
                             Button(action: { timer.isLooping.toggle() }) {
-                                Image(systemName: "repeat")
-                                    .font(.system(size: size * 0.045))
-                                    .foregroundStyle(timer.isLooping ? .red : .white.opacity(0.7))
-                                    .frame(width: circleSize, height: circleSize)
-                                    .background(Circle().fill(timer.isLooping ? Color.red.opacity(0.2) : Color(white: 0.2)))
+                                Text("Loop")
+                                    .font(.system(size: size * 0.035, weight: .medium))
+                                    .foregroundStyle(timer.isLooping ? .white : .white.opacity(0.7))
+                                    .padding(.horizontal, size * 0.025)
+                                    .padding(.vertical, size * 0.015)
+                                    .background(Capsule().fill(timer.isLooping ? Color.red : Color(white: 0.2)))
                             }
                             .buttonStyle(.plain)
                         }
