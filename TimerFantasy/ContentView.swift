@@ -387,16 +387,50 @@ enum ClockfaceScale: String, CaseIterable {
     }
 }
 
+// MARK: - Vertical Alignment
+enum VerticalAlignment: String, CaseIterable {
+    case top, middle, bottom
+
+    var next: VerticalAlignment {
+        switch self {
+        case .top: return .middle
+        case .middle: return .bottom
+        case .bottom: return .top
+        }
+    }
+
+    var frameAlignment: Alignment {
+        switch self {
+        case .top: return .top
+        case .middle: return .center
+        case .bottom: return .bottom
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .top: return "arrow.up.to.line"
+        case .middle: return "arrow.up.and.down"
+        case .bottom: return "arrow.down.to.line"
+        }
+    }
+}
+
 // MARK: - Main View
 struct ContentView: View {
     @State private var timers: [TimerModel] = []
     @State private var saveTimer: AnyCancellable?
     @State private var draggingTimer: TimerModel?
+    @AppStorage("verticalAlignment") private var verticalAlignment: String = "middle"
     let globalTimer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
 
     private let spacing: CGFloat = 8
     private let columnCount = 2
     private let baseCardSize: CGFloat = 200
+
+    private var currentAlignment: VerticalAlignment {
+        VerticalAlignment(rawValue: verticalAlignment) ?? .middle
+    }
 
     private var rowCount: Int {
         Int(ceil(Double(max(1, timers.count)) / Double(columnCount)))
@@ -489,7 +523,20 @@ struct ContentView: View {
                 }
             }
             .frame(width: actualGridWidth, height: actualGridHeight)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: currentAlignment.frameAlignment)
+        }
+        .overlay(alignment: .topTrailing) {
+            Button(action: {
+                verticalAlignment = currentAlignment.next.rawValue
+            }) {
+                Image(systemName: currentAlignment.icon)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.6))
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(Color(white: 0.15)))
+            }
+            .buttonStyle(.plain)
+            .padding(8)
         }
         .preferredColorScheme(.dark)
         .onAppear {
@@ -1501,15 +1548,32 @@ struct AnalogTimerView: View {
         return mins
     }
 
+    // Clock face opacity based on time of day
+    // Noon = 100%, 6am/6pm = 75%, Midnight = 50%
+    private var clockFaceOpacity: Double {
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: Date())
+        let minute = calendar.component(.minute, from: Date())
+        let hourDecimal = Double(hour) + Double(minute) / 60.0
+
+        // Sine wave: peaks at noon (12), troughs at midnight (0/24)
+        // Maps 0-24 hours to 0-2π, with peak at π/2 (noon)
+        let radians = (hourDecimal - 6) * .pi / 12  // Shift so noon is at peak
+        let normalized = (sin(radians) + 1) / 2  // 0 to 1
+
+        // Scale from 0.5 (midnight) to 1.0 (noon)
+        return 0.5 + normalized * 0.5
+    }
+
     var body: some View {
         GeometryReader { geometry in
             let size = min(geometry.size.width, geometry.size.height)
             let degreesPerTick = 360.0 / Double(tickCount)
 
             ZStack {
-                // Background circle (white) - smaller to leave room for labels outside
+                // Background circle (white) - opacity based on time of day
                 Circle()
-                    .fill(Color.white)
+                    .fill(Color.white.opacity(clockFaceOpacity))
                     .frame(width: size * 0.65, height: size * 0.65)
 
                 // Tick marks - aligned with labels (drawn before red so they're underneath)
