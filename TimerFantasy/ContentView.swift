@@ -707,6 +707,7 @@ struct TimerCardView: View {
     @FocusState private var focusedField: TimeField?
     @State private var showDeleteConfirmation = false
     @State private var showCancelConfirmation = false
+    @State private var showOptionsMenu = false
     @State private var labelBeforeEdit: String = ""
     @State private var showEndAtPicker = false
     @State private var selectedEndTime = Date()
@@ -1242,32 +1243,15 @@ struct TimerCardView: View {
                     HStack(spacing: size * 0.02) {
                         // Menu button (only when running/paused)
                         if timer.timerState == .running || timer.timerState == .paused {
-                            Menu {
-                                Button(action: { copyTimerAsMarkdown() }) {
-                                    Label("Copy as Markdown", systemImage: "doc.on.doc")
-                                }
-                                Divider()
-                                Button(action: { timer.useAutoColor.toggle() }) {
-                                    Label("Auto Color", systemImage: timer.useAutoColor ? "checkmark.circle.fill" : "circle")
-                                }
-                                Button(action: { timer.useAutoClockface.toggle() }) {
-                                    Label("Auto Zoom", systemImage: timer.useAutoClockface ? "checkmark.circle.fill" : "circle")
-                                }
-                                Button(action: { timer.useFlashWarning.toggle() }) {
-                                    Label("Flash Warning", systemImage: timer.useFlashWarning ? "checkmark.circle.fill" : "circle")
-                                }
-                            } label: {
-                                ZStack {
-                                    Circle()
-                                        .fill(Color(white: 0.2))
-                                        .frame(width: size * 0.12, height: size * 0.12)
-                                    Image(systemName: "ellipsis")
-                                        .font(.system(size: size * 0.05, weight: .medium))
-                                        .foregroundStyle(.white)
-                                }
+                            Button(action: { }) {
+                                Image(systemName: "ellipsis")
+                                    .font(.system(size: size * 0.05, weight: .medium))
+                                    .foregroundStyle(.white)
+                                    .frame(width: size * 0.12, height: size * 0.12)
+                                    .background(Color(white: 0.2))
+                                    .clipShape(Circle())
                             }
-                            .menuStyle(.borderlessButton)
-                            .menuIndicator(.hidden)
+                            .buttonStyle(.plain)
                         }
 
                         // Add button
