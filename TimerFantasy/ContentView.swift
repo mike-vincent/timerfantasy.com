@@ -1094,9 +1094,9 @@ struct TimerCardView: View {
                                 }
                                 .foregroundStyle(.white.opacity(0.5))
 
-                                // Countdown
+                                // Countdown - monospaced digits prevent layout jumping
                                 Text(formatDuration(timer.timeRemaining))
-                                    .font(.system(size: 24, weight: .bold))
+                                    .font(.system(size: 24, weight: .bold).monospacedDigit())
                                     .foregroundStyle(.white)
                             }
                         }
