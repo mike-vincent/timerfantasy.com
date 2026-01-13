@@ -1646,7 +1646,7 @@ struct AnalogTimerView: View {
     }
 
     private var isHourScale: Bool {
-        clockfaceSeconds >= 3600 && clockfaceSeconds > 7200  // More than 2 hours = hour labels
+        clockfaceSeconds > 7200  // More than 2 hours = hour labels
     }
 
     private var tickCount: Int {
@@ -1746,7 +1746,8 @@ struct AnalogTimerView: View {
                     let radius = size * 0.32  // Inside the clock edge
                     let x = radius * cos(angle * .pi / 180)
                     let y = radius * sin(angle * .pi / 180)
-                    Text("\(value)")
+                    let label = value == 0 ? (isHourScale ? "0h" : "0m") : "\(value)"
+                    Text(label)
                         .font(.system(size: size * 0.09, weight: .heavy))
                         .foregroundColor(.black)
                         .position(x: size/2 + x, y: size/2 + y)
