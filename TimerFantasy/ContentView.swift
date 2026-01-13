@@ -308,7 +308,7 @@ class TimerModel: ObservableObject, Identifiable {
 
     // Translucent ruby red like litho tape
     var autoColor: Color {
-        .red.opacity(0.7)
+        .red.opacity(0.9)
     }
 
     func start() {
