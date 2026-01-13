@@ -1241,14 +1241,6 @@ struct TimerCardView: View {
                 // Base background
                 Color(white: 0.1)
 
-                // Water fill - matches watchface scale (only when running/paused)
-                if timer.timerState == .running || timer.timerState == .paused {
-                    let clockfaceSeconds = timer.effectiveClockface.seconds
-                    let progress = 1.0 - (timer.timeRemaining / clockfaceSeconds)
-                    Rectangle()
-                        .fill(timer.effectiveColor)
-                        .frame(height: size * max(0, min(1, progress)))
-                }
             }
         )
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
