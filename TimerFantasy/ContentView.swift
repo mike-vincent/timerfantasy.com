@@ -1084,27 +1084,25 @@ struct TimerCardView: View {
                             }
 
                             // Right column: end time and countdown
-                            VStack(alignment: .leading, spacing: size * 0.01) {
+                            VStack(alignment: .leading, spacing: 4) {
                                 // Bell with end time
-                                HStack(spacing: size * 0.015) {
+                                HStack(spacing: 4) {
                                     Image(systemName: timer.selectedAlarmSound == "No Sound" ? "bell.slash.fill" : "bell.fill")
-                                        .font(.system(size: size * 0.03))
+                                        .font(.system(size: 10))
                                     Text(getEndTimeString())
-                                        .font(.system(size: size * 0.04, weight: .medium))
+                                        .font(.system(size: 12, weight: .medium))
                                 }
                                 .foregroundStyle(.white.opacity(0.5))
 
                                 // Countdown
                                 Text(formatDuration(timer.timeRemaining))
-                                    .font(.system(size: size * 0.28, weight: .bold))
+                                    .font(.system(size: 24, weight: .bold))
                                     .foregroundStyle(.white)
                             }
                         }
 
                         // Sound, Duration, Loop controls
-                        HStack(spacing: size * 0.04) {
-                            let circleSize = size * 0.10
-
+                        HStack(spacing: 8) {
                             // Sound picker
                             Menu {
                                 ForEach(alarmSounds, id: \.self) { sound in
@@ -1122,10 +1120,10 @@ struct TimerCardView: View {
                                 let displayName = timer.selectedAlarmSound
                                     .replacingOccurrences(of: " (Default)", with: "")
                                 Text(displayName == "No Sound" ? "Mute" : displayName)
-                                    .font(.system(size: size * 0.035, weight: .medium))
+                                    .font(.system(size: 10, weight: .medium))
                                     .foregroundStyle(.white.opacity(0.7))
-                                    .padding(.horizontal, size * 0.025)
-                                    .padding(.vertical, size * 0.015)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 4)
                                     .background(Capsule().fill(Color(white: 0.2)))
                             }
                             .menuStyle(.borderlessButton)
@@ -1141,23 +1139,23 @@ struct TimerCardView: View {
                             } label: {
                                 ZStack {
                                     Circle().fill(Color(white: 0.2))
-                                        .frame(width: circleSize, height: circleSize)
+                                        .frame(width: 20, height: 20)
                                     Text("\(timer.alarmDuration)s")
-                                        .font(.system(size: size * 0.042, weight: .medium))
+                                        .font(.system(size: 8, weight: .medium))
                                         .foregroundStyle(.white.opacity(0.7))
                                 }
                             }
                             .menuStyle(.borderlessButton)
                             .menuIndicator(.hidden)
-                            .frame(width: circleSize, height: circleSize)
+                            .frame(width: 20, height: 20)
 
                             // Loop toggle
                             Button(action: { timer.isLooping.toggle() }) {
                                 Text("Loop")
-                                    .font(.system(size: size * 0.035, weight: .medium))
+                                    .font(.system(size: 10, weight: .medium))
                                     .foregroundStyle(timer.isLooping ? .white : .white.opacity(0.7))
-                                    .padding(.horizontal, size * 0.025)
-                                    .padding(.vertical, size * 0.015)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 4)
                                     .background(Capsule().fill(timer.isLooping ? Color.red : Color(white: 0.2)))
                             }
                             .buttonStyle(.plain)
