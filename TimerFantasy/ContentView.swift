@@ -1246,18 +1246,7 @@ struct TimerCardView: View {
                     let clockfaceSeconds = timer.effectiveClockface.seconds
                     let progress = 1.0 - (timer.timeRemaining / clockfaceSeconds)
                     Rectangle()
-                        .fill(
-                            LinearGradient(
-                                stops: [
-                                    .init(color: timer.effectiveColor, location: 0),
-                                    .init(color: timer.effectiveColor.opacity(0.8), location: 0.5),
-                                    .init(color: timer.effectiveColor.opacity(0.4), location: 0.85),
-                                    .init(color: .clear, location: 1)
-                                ],
-                                startPoint: .bottom,
-                                endPoint: .top
-                            )
-                        )
+                        .fill(timer.effectiveColor)
                         .frame(height: size * max(0, min(1, progress)))
                 }
             }
