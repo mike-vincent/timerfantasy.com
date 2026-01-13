@@ -839,7 +839,7 @@ struct TimerCardView: View {
     }
 
     var body: some View {
-        let clockSize = size * 0.5
+        let clockSize = size * 0.4
         let digitFontSize = size * 0.16
         let countdownFontSize = size * 0.12
         let buttonFontSize = size * 0.04
