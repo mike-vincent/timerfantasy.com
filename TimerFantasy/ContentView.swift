@@ -1088,7 +1088,7 @@ struct TimerCardView: View {
                             HStack(spacing: size * 0.01) {
                                 Image(systemName: timer.selectedAlarmSound == "No Sound" ? "bell.slash.fill" : "bell.fill")
                                     .font(.system(size: size * 0.03))
-                                Text("\(timer.initialTimeFormatted) → \(getEndTimeString())")
+                                Text(getEndTimeString())
                                     .font(.system(size: size * 0.035, weight: .medium))
                             }
                             .foregroundStyle(.white.opacity(0.5))
