@@ -489,7 +489,8 @@ struct ContentView: View {
 
     private let spacing: CGFloat = 8
     private let columnCount = 2
-    private let baseCardSize: CGFloat = 200
+    private let baseCardHeight: CGFloat = 200
+    private let baseCardWidth: CGFloat = 400  // 2:1 aspect ratio
 
     private var currentAlignment: VerticalAlignment {
         VerticalAlignment(rawValue: verticalAlignment) ?? .middle
@@ -527,8 +528,8 @@ struct ContentView: View {
         guard let window = NSApplication.shared.windows.first else { return }
         // Allow completely free resizing
         window.resizeIncrements = NSSize(width: 1, height: 1)
-        // Minimum size for one card
-        window.minSize = NSSize(width: baseCardSize + spacing * 2, height: baseCardSize + spacing * 2 + 28)
+        // Minimum size for one 2:1 card
+        window.minSize = NSSize(width: baseCardWidth + spacing * 2, height: baseCardHeight + spacing * 2 + 28)
     }
 
     var body: some View {
