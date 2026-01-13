@@ -1054,125 +1054,58 @@ struct TimerCardView: View {
                         timer.dismissAlarm()
                     }
                 } else {
-                    // Running/Paused: two column layout
+                    // Running/Paused: watchface centered with info below
                     VStack(spacing: size * 0.02) {
-                        HStack(spacing: 0) {
-                            // Left column: clock - centered
-                            ZStack {
-                                AnalogTimerView(
-                                    remainingSeconds: timer.timeRemaining,
-                                    clockfaceSeconds: timer.effectiveClockface.seconds,
-                                    pieColor: timer.effectiveColor,
-                                    onSetTime: { seconds in
-                                        timer.timeRemaining = max(1, seconds)
-                                        timer.endTime = Date().addingTimeInterval(seconds)
-                                    }
-                                )
-                                .frame(width: clockSize, height: clockSize)
-
-                                // Watchface label - above center dot
-                                Text(timer.effectiveClockface.label)
-                                    .font(.system(size: clockSize * 0.07, weight: .medium))
-                                    .foregroundStyle(.black.opacity(0.5))
-                                    .offset(y: -clockSize * 0.12)
-
-                                // Initial set time - below center dot
-                                Text(timer.initialTimeFormatted)
-                                    .font(.system(size: clockSize * 0.07, weight: .medium))
-                                    .foregroundStyle(.black.opacity(0.5))
-                                    .offset(y: clockSize * 0.12)
-                            }
-                            .frame(maxWidth: .infinity)
-
-                            // Right column: end time and countdown - centered
-                            VStack(alignment: .center, spacing: size * 0.02) {
-                                // Bell with end time
-                                HStack(spacing: size * 0.01) {
-                                    Image(systemName: timer.selectedAlarmSound == "No Sound" ? "bell.slash.fill" : "bell.fill")
-                                        .font(.system(size: size * 0.04))
-                                    Text(getEndTimeString())
-                                        .font(.system(size: size * 0.05, weight: .medium))
+                        // Watchface centered
+                        ZStack {
+                            AnalogTimerView(
+                                remainingSeconds: timer.timeRemaining,
+                                clockfaceSeconds: timer.effectiveClockface.seconds,
+                                pieColor: timer.effectiveColor,
+                                onSetTime: { seconds in
+                                    timer.timeRemaining = max(1, seconds)
+                                    timer.endTime = Date().addingTimeInterval(seconds)
                                 }
-                                .foregroundStyle(.white.opacity(0.5))
+                            )
+                            .frame(width: clockSize, height: clockSize)
 
-                                // Countdown - monospaced digits prevent layout jumping
-                                Text(formatDuration(timer.timeRemaining))
-                                    .font(.system(size: size * 0.12, weight: .bold).monospacedDigit())
-                                    .foregroundStyle(.white)
-                            }
-                            .frame(maxWidth: .infinity)
+                            // Watchface label - above center dot
+                            Text(timer.effectiveClockface.label)
+                                .font(.system(size: clockSize * 0.07, weight: .medium))
+                                .foregroundStyle(.black.opacity(0.5))
+                                .offset(y: -clockSize * 0.12)
+
+                            // Initial set time - below center dot
+                            Text(timer.initialTimeFormatted)
+                                .font(.system(size: clockSize * 0.07, weight: .medium))
+                                .foregroundStyle(.black.opacity(0.5))
+                                .offset(y: clockSize * 0.12)
                         }
 
-                        // Sound, Duration, Loop controls
-                        HStack(spacing: size * 0.03) {
-                            let circleSize = size * 0.08
-
-                            // Sound picker
-                            Menu {
-                                ForEach(alarmSounds, id: \.self) { sound in
-                                    Button(sound) {
-                                        timer.selectedAlarmSound = sound
-                                        if sound != "No Sound" {
-                                            let soundName = sound.replacingOccurrences(of: " (Default)", with: "")
-                                            if let s = NSSound(named: NSSound.Name(soundName)) {
-                                                s.play()
-                                            }
-                                        }
-                                    }
-                                }
-                            } label: {
-                                let displayName = timer.selectedAlarmSound
-                                    .replacingOccurrences(of: " (Default)", with: "")
-                                Text(displayName == "No Sound" ? "Mute" : displayName)
+                        // Info below watchface
+                        VStack(spacing: size * 0.01) {
+                            // Bell with end time
+                            HStack(spacing: size * 0.01) {
+                                Image(systemName: timer.selectedAlarmSound == "No Sound" ? "bell.slash.fill" : "bell.fill")
+                                    .font(.system(size: size * 0.03))
+                                Text("\(timer.initialTimeFormatted) → \(getEndTimeString())")
                                     .font(.system(size: size * 0.035, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.7))
-                                    .padding(.horizontal, size * 0.02)
-                                    .padding(.vertical, size * 0.01)
-                                    .background(Capsule().fill(Color(white: 0.2)))
                             }
-                            .menuStyle(.borderlessButton)
-                            .menuIndicator(.hidden)
+                            .foregroundStyle(.white.opacity(0.5))
 
-                            // Duration picker
-                            Menu {
-                                ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
-                                    Button("\(seconds)s") {
-                                        timer.alarmDuration = seconds
-                                    }
-                                }
-                            } label: {
-                                ZStack {
-                                    Circle().fill(Color(white: 0.2))
-                                        .frame(width: circleSize, height: circleSize)
-                                    Text("\(timer.alarmDuration)s")
-                                        .font(.system(size: size * 0.03, weight: .medium))
-                                        .foregroundStyle(.white.opacity(0.7))
-                                }
-                            }
-                            .menuStyle(.borderlessButton)
-                            .menuIndicator(.hidden)
-                            .frame(width: circleSize, height: circleSize)
-
-                            // Loop toggle
-                            Button(action: { timer.isLooping.toggle() }) {
-                                Text("Loop")
-                                    .font(.system(size: size * 0.035, weight: .medium))
-                                    .foregroundStyle(timer.isLooping ? .white : .white.opacity(0.7))
-                                    .padding(.horizontal, size * 0.02)
-                                    .padding(.vertical, size * 0.01)
-                                    .background(Capsule().fill(timer.isLooping ? Color.red : Color(white: 0.2)))
-                            }
-                            .buttonStyle(.plain)
+                            // Countdown
+                            Text(formatDuration(timer.timeRemaining))
+                                .font(.system(size: size * 0.08, weight: .bold).monospacedDigit())
+                                .foregroundStyle(.white)
                         }
                     }
                 }
             }
 
-            // Top row: clockface toggle and label (left) - only when running/paused
+            // Top left: clockface, label, and controls - only when running/paused
             if timer.timerState == .running || timer.timerState == .paused {
                 VStack {
                     HStack {
-                        // Clockface toggle and label - top left, stacked
                         VStack(alignment: .leading, spacing: size * 0.01) {
                             Button(action: {
                                 if timer.useAutoClockface {
@@ -1190,6 +1123,64 @@ struct TimerCardView: View {
                                 .font(.system(size: size * 0.035, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.6))
                                 .textFieldStyle(.plain)
+
+                            // Sound, Duration, Loop controls
+                            HStack(spacing: size * 0.015) {
+                                // Sound picker
+                                Menu {
+                                    ForEach(alarmSounds, id: \.self) { sound in
+                                        Button(sound) {
+                                            timer.selectedAlarmSound = sound
+                                            if sound != "No Sound" {
+                                                let soundName = sound.replacingOccurrences(of: " (Default)", with: "")
+                                                if let s = NSSound(named: NSSound.Name(soundName)) {
+                                                    s.play()
+                                                }
+                                            }
+                                        }
+                                    }
+                                } label: {
+                                    let displayName = timer.selectedAlarmSound
+                                        .replacingOccurrences(of: " (Default)", with: "")
+                                    Text(displayName == "No Sound" ? "Mute" : displayName)
+                                        .font(.system(size: size * 0.03, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.7))
+                                        .padding(.horizontal, size * 0.012)
+                                        .padding(.vertical, size * 0.006)
+                                        .background(Capsule().fill(Color(white: 0.2)))
+                                }
+                                .menuStyle(.borderlessButton)
+                                .menuIndicator(.hidden)
+
+                                // Duration picker
+                                Menu {
+                                    ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
+                                        Button("\(seconds)s") {
+                                            timer.alarmDuration = seconds
+                                        }
+                                    }
+                                } label: {
+                                    Text("\(timer.alarmDuration)s")
+                                        .font(.system(size: size * 0.03, weight: .medium))
+                                        .foregroundStyle(.white.opacity(0.7))
+                                        .padding(.horizontal, size * 0.012)
+                                        .padding(.vertical, size * 0.006)
+                                        .background(Capsule().fill(Color(white: 0.2)))
+                                }
+                                .menuStyle(.borderlessButton)
+                                .menuIndicator(.hidden)
+
+                                // Loop toggle
+                                Button(action: { timer.isLooping.toggle() }) {
+                                    Text("Loop")
+                                        .font(.system(size: size * 0.03, weight: .medium))
+                                        .foregroundStyle(timer.isLooping ? .white : .white.opacity(0.7))
+                                        .padding(.horizontal, size * 0.012)
+                                        .padding(.vertical, size * 0.006)
+                                        .background(Capsule().fill(timer.isLooping ? Color.red : Color(white: 0.2)))
+                                }
+                                .buttonStyle(.plain)
+                            }
                         }
                         Spacer()
                     }
