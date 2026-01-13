@@ -2,6 +2,48 @@ import SwiftUI
 import Combine
 import AppKit
 
+// MARK: - Shimmer Effect Modifier
+struct ShimmerModifier: ViewModifier {
+    let isActive: Bool
+    @State private var phase: CGFloat = 0
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                GeometryReader { geo in
+                    if isActive {
+                        LinearGradient(
+                            stops: [
+                                .init(color: .clear, location: 0),
+                                .init(color: .white.opacity(0.15), location: 0.3),
+                                .init(color: .white.opacity(0.25), location: 0.5),
+                                .init(color: .white.opacity(0.15), location: 0.7),
+                                .init(color: .clear, location: 1)
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                        .frame(width: geo.size.width)
+                        .offset(x: -geo.size.width + phase * geo.size.width * 2)
+                        .blendMode(.softLight)
+                        .onAppear {
+                            withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: false)) {
+                                phase = 1
+                            }
+                        }
+                    }
+                }
+            )
+            .clipped()
+    }
+}
+
+extension View {
+    func shimmer(active: Bool) -> some View {
+        modifier(ShimmerModifier(isActive: active))
+    }
+}
+
 // MARK: - Persistable Timer Data
 struct TimerData: Codable, Identifiable {
     let id: UUID
@@ -21,6 +63,11 @@ struct TimerData: Codable, Identifiable {
     var useAutoColor: Bool?
     var useAutoClockface: Bool?
     var useFlashWarning: Bool?
+    // End At mode settings
+    var useEndAtMode: Bool?
+    var endAtHour: Int?
+    var endAtMinute: Int?
+    var endAtIsPM: Bool?
 }
 
 // MARK: - Color Hex Conversion
@@ -93,7 +140,11 @@ class TimerStore: ObservableObject {
                 timerColorHex: timer.timerColor.hexString,
                 useAutoColor: timer.useAutoColor,
                 useAutoClockface: timer.useAutoClockface,
-                useFlashWarning: timer.useFlashWarning
+                useFlashWarning: timer.useFlashWarning,
+                useEndAtMode: timer.useEndAtMode,
+                endAtHour: timer.endAtHour,
+                endAtMinute: timer.endAtMinute,
+                endAtIsPM: timer.endAtIsPM
             )
         }
 
@@ -137,6 +188,18 @@ class TimerStore: ObservableObject {
             }
             if let useFlashWarning = data.useFlashWarning {
                 timer.useFlashWarning = useFlashWarning
+            }
+            if let useEndAtMode = data.useEndAtMode {
+                timer.useEndAtMode = useEndAtMode
+            }
+            if let endAtHour = data.endAtHour {
+                timer.endAtHour = endAtHour
+            }
+            if let endAtMinute = data.endAtMinute {
+                timer.endAtMinute = endAtMinute
+            }
+            if let endAtIsPM = data.endAtIsPM {
+                timer.endAtIsPM = endAtIsPM
             }
 
             // Restore running timer based on endTime
@@ -192,6 +255,11 @@ class TimerModel: ObservableObject, Identifiable {
     @Published var useAutoColor: Bool = true  // Auto rainbow color based on time remaining
     @Published var useAutoClockface: Bool = true  // Auto-shrink watchface as time decreases
     @Published var useFlashWarning: Bool = true  // Flash in last 5%
+    // End At mode settings
+    @Published var useEndAtMode: Bool = false
+    @Published var endAtHour: Int = 12
+    @Published var endAtMinute: Int = 0
+    @Published var endAtIsPM: Bool = false
 
     enum TimerState: String { case idle, running, paused, alarming }
 
@@ -225,22 +293,17 @@ class TimerModel: ObservableObject, Identifiable {
         useAutoClockface ? autoClockface : selectedClockface
     }
 
-    // Effective color (auto or manual, with flash warning)
+    // Whether we're in the warning zone (last 5% of watchface)
+    var isInWarningZone: Bool {
+        guard useFlashWarning else { return false }
+        let clockfaceSeconds = effectiveClockface.seconds
+        let percent = clockfaceSeconds > 0 ? timeRemaining / clockfaceSeconds : 1.0
+        return percent < 0.05
+    }
+
+    // Effective color (auto or manual)
     var effectiveColor: Color {
-        let baseColor = useAutoColor ? autoColor : timerColor
-
-        // Flash in last 5% of current watchface
-        if useFlashWarning {
-            let clockfaceSeconds = effectiveClockface.seconds
-            let percent = clockfaceSeconds > 0 ? timeRemaining / clockfaceSeconds : 1.0
-            if percent < 0.05 {
-                // Flash every 0.25 seconds
-                let flash = Int(Date().timeIntervalSinceReferenceDate * 4) % 2 == 0
-                return flash ? baseColor : Color.white
-            }
-        }
-
-        return baseColor
+        useAutoColor ? autoColor : timerColor
     }
 
     // Urgency: red with increasing opacity as time runs out
@@ -445,9 +508,11 @@ struct ContentView: View {
         var bestRows = itemCount
         var bestRatioDiff = Double.infinity
 
+        // Cards are 2:1 aspect ratio, so grid ratio needs to account for that
+        let cardAspect = 2.0  // width / height
         for testCols in 1...itemCount {
             let testRows = Int(ceil(Double(itemCount) / Double(testCols)))
-            let gridRatio = Double(testCols) / Double(testRows)
+            let gridRatio = (Double(testCols) * cardAspect) / Double(testRows)
             let diff = abs(gridRatio - windowRatio)
             if diff < bestRatioDiff {
                 bestRatioDiff = diff
@@ -474,13 +539,17 @@ struct ContentView: View {
             let actualCols = layout.cols
             let actualRows = layout.rows
 
-            // Card size to fill available space based on actual grid dimensions
+            // Card size to fill available space based on actual grid dimensions (2:1 aspect ratio)
             let availableWidth = geo.size.width - spacing * CGFloat(actualCols + 1)
             let availableHeight = geo.size.height - spacing * CGFloat(actualRows + 1)
-            let cardSize = min(availableWidth / CGFloat(actualCols), availableHeight / CGFloat(actualRows))
+            // For 2:1 cards: cardWidth = 2 * cardHeight
+            let maxCardWidth = availableWidth / CGFloat(actualCols)
+            let maxCardHeight = availableHeight / CGFloat(actualRows)
+            let cardHeight = min(maxCardWidth / 2, maxCardHeight)
+            let cardWidth = cardHeight * 2
 
-            let actualGridWidth = CGFloat(actualCols) * cardSize + CGFloat(actualCols - 1) * spacing
-            let actualGridHeight = CGFloat(actualRows) * cardSize + CGFloat(actualRows - 1) * spacing
+            let actualGridWidth = CGFloat(actualCols) * cardWidth + CGFloat(actualCols - 1) * spacing
+            let actualGridHeight = CGFloat(actualRows) * cardHeight + CGFloat(actualRows - 1) * spacing
 
             VStack(spacing: spacing) {
                 ForEach(0..<actualRows, id: \.self) { row in
@@ -489,7 +558,7 @@ struct ContentView: View {
                             let index = row * actualCols + col
                             if index < timers.count {
                                 let timer = timers[index]
-                                TimerCardView(timer: timer, compact: true, size: cardSize, onDelete: timers.count > 1 ? {
+                                TimerCardView(timer: timer, compact: true, width: cardWidth, height: cardHeight, onDelete: timers.count > 1 ? {
                                     _ = withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                         timers.remove(at: index)
                                     }
@@ -500,7 +569,7 @@ struct ContentView: View {
                                     }
                                     saveTimers()
                                 })
-                                .frame(width: cardSize, height: cardSize)
+                                .frame(width: cardWidth, height: cardHeight)
                                 .transition(.scale.combined(with: .opacity))
                                 .opacity(draggingTimer?.id == timer.id ? 0.5 : 1)
                                 .onDrag {
@@ -516,7 +585,7 @@ struct ContentView: View {
                             } else {
                                 // Invisible placeholder to complete the row
                                 Color.clear
-                                    .frame(width: cardSize, height: cardSize)
+                                    .frame(width: cardWidth, height: cardHeight)
                             }
                         }
                     }
@@ -618,11 +687,12 @@ struct RecentTimer: Identifiable, Equatable {
 struct TimerCardView: View {
     @ObservedObject var timer: TimerModel
     var compact: Bool = false
-    var size: CGFloat = 200  // Card size for proportional scaling
+    var width: CGFloat = 400  // Card width (2:1 aspect ratio)
+    var height: CGFloat = 200  // Card height for proportional scaling
     var onDelete: (() -> Void)? = nil
     var onAdd: (() -> Void)? = nil
 
-    private var scale: CGFloat { size / 200 }  // Base size is 200
+    private var scale: CGFloat { height / 200 }  // Base height is 200
 
     let alarmSounds = [
         "No Sound", "Glass (Default)", "Basso", "Blow", "Bottle", "Frog", "Funk",
@@ -652,10 +722,6 @@ struct TimerCardView: View {
     @State private var showEndAtPicker = false
     @State private var selectedEndTime = Date()
     @State private var isEditingLabel = false
-    @State private var useEndAtMode = false
-    @State private var endAtHour = 12
-    @State private var endAtMinute = 0
-    @State private var endAtIsPM = false
 
     enum TimeField: Hashable {
         case hours, minutes, seconds, label
@@ -672,7 +738,7 @@ struct TimerCardView: View {
     var rightButtonColor: Color {
         switch timer.timerState {
         case .idle, .paused: return .green
-        case .running: return .blue
+        case .running: return .green
         case .alarming: return .red
         }
     }
@@ -753,18 +819,18 @@ struct TimerCardView: View {
 
     func updateEndAtDuration() {
         // Convert 12-hour to 24-hour
-        var hour24 = endAtHour
-        if endAtHour == 12 {
-            hour24 = endAtIsPM ? 12 : 0
+        var hour24 = timer.endAtHour
+        if timer.endAtHour == 12 {
+            hour24 = timer.endAtIsPM ? 12 : 0
         } else {
-            hour24 = endAtIsPM ? endAtHour + 12 : endAtHour
+            hour24 = timer.endAtIsPM ? timer.endAtHour + 12 : timer.endAtHour
         }
 
         // Create target date
         let calendar = Calendar.current
         var components = calendar.dateComponents([.year, .month, .day], from: Date())
         components.hour = hour24
-        components.minute = endAtMinute
+        components.minute = timer.endAtMinute
         components.second = 0
 
         guard var targetDate = calendar.date(from: components) else { return }
@@ -784,80 +850,116 @@ struct TimerCardView: View {
     }
 
     var body: some View {
-        let clockSize = size * 0.5
-        let digitFontSize = size * 0.16
-        let countdownFontSize = size * 0.12
-        let buttonFontSize = size * 0.04
-        let buttonWidth = size * 0.20
-        let buttonHeight = size * 0.09
-        let cornerRadius = size * 0.06
-        let padding = size * 0.04
+        let clockSize = height * 0.7
+        let digitFontSize = height * 0.16
+        let countdownFontSize = height * 0.12
+        let buttonFontSize = height * 0.04
+        let buttonWidth = height * 0.20
+        let buttonHeight2 = height * 0.09
+        let cornerRadius = height * 0.06
+        let padding = height * 0.04
 
         ZStack {
             // Main content centered
-            VStack(spacing: size * 0.02) {
+            VStack(spacing: height * 0.02) {
                 if timer.timerState == .idle {
                     // Mode toggle
-                    Button(action: { useEndAtMode.toggle() }) {
-                        Text(useEndAtMode ? "End At" : "Duration")
-                            .font(.system(size: size * 0.035, weight: .medium))
+                    Button(action: { timer.useEndAtMode.toggle() }) {
+                        Text(timer.useEndAtMode ? "End At" : "Duration")
+                            .font(.system(size: height * 0.035, weight: .medium))
                             .foregroundStyle(.white.opacity(0.8))
-                            .padding(.horizontal, size * 0.04)
-                            .padding(.vertical, size * 0.015)
+                            .padding(.horizontal, height * 0.04)
+                            .padding(.vertical, height * 0.015)
                             .background(Color(white: 0.2))
                             .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
 
-                    if useEndAtMode {
-                        // End At time input - same digit style
-                        HStack(spacing: 0) {
-                            TimeDigitField(value: $endAtHour, maxValue: 12, isFocused: focusedField == .hours, size: size * 0.22, onSubmit: { timer.start() })
-                                .focused($focusedField, equals: .hours)
-                            Text(":")
-                                .font(.system(size: digitFontSize, weight: .thin))
-                                .foregroundStyle(.white)
-                                .frame(width: size * 0.05)
-                            TimeDigitField(value: $endAtMinute, maxValue: 59, isFocused: focusedField == .minutes, size: size * 0.22, onSubmit: { timer.start() })
-                                .focused($focusedField, equals: .minutes)
-
-                            // AM/PM toggle
-                            Button(action: { endAtIsPM.toggle() }) {
-                                Text(endAtIsPM ? "PM" : "AM")
-                                    .font(.system(size: size * 0.06, weight: .medium))
+                    // Quick preset buttons
+                    HStack(spacing: height * 0.02) {
+                        ForEach(["5m", "15m", "30m", "1h"], id: \.self) { preset in
+                            Button(action: {
+                                timer.useEndAtMode = false
+                                switch preset {
+                                case "5m":
+                                    timer.selectedHours = 0
+                                    timer.selectedMinutes = 5
+                                    timer.selectedSeconds = 0
+                                case "15m":
+                                    timer.selectedHours = 0
+                                    timer.selectedMinutes = 15
+                                    timer.selectedSeconds = 0
+                                case "30m":
+                                    timer.selectedHours = 0
+                                    timer.selectedMinutes = 30
+                                    timer.selectedSeconds = 0
+                                case "1h":
+                                    timer.selectedHours = 1
+                                    timer.selectedMinutes = 0
+                                    timer.selectedSeconds = 0
+                                default: break
+                                }
+                            }) {
+                                Text(preset)
+                                    .font(.system(size: height * 0.035, weight: .medium))
                                     .foregroundStyle(.white.opacity(0.7))
-                                    .frame(width: size * 0.12)
+                                    .padding(.horizontal, height * 0.025)
+                                    .padding(.vertical, height * 0.012)
+                                    .background(Capsule().fill(Color(white: 0.2)))
                             }
                             .buttonStyle(.plain)
                         }
-                        .onChange(of: endAtHour) { _, _ in updateEndAtDuration() }
-                        .onChange(of: endAtMinute) { _, _ in updateEndAtDuration() }
-                        .onChange(of: endAtIsPM) { _, _ in updateEndAtDuration() }
-                    } else {
-                        // Clickable digits for duration
+                    }
+
+                    if timer.useEndAtMode {
+                        // End At time input - same digit style
                         HStack(spacing: 0) {
-                            TimeDigitField(value: $timer.selectedHours, maxValue: 168, isFocused: focusedField == .hours, size: size * 0.22, onSubmit: { timer.start() })
+                            TimeDigitField(value: $timer.endAtHour, maxValue: 12, isFocused: focusedField == .hours, size: height * 0.22, onSubmit: { timer.start() })
                                 .focused($focusedField, equals: .hours)
                             Text(":")
                                 .font(.system(size: digitFontSize, weight: .thin))
                                 .foregroundStyle(.white)
-                                .frame(width: size * 0.05)
+                                .frame(width: height * 0.05)
+                            TimeDigitField(value: $timer.endAtMinute, maxValue: 59, isFocused: focusedField == .minutes, size: height * 0.22, onSubmit: { timer.start() })
+                                .focused($focusedField, equals: .minutes)
+
+                            // AM/PM toggle
+                            Button(action: { timer.endAtIsPM.toggle() }) {
+                                Text(timer.endAtIsPM ? "PM" : "AM")
+                                    .font(.system(size: height * 0.06, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.7))
+                                    .frame(width: height * 0.12)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .onChange(of: timer.endAtHour) { _, _ in updateEndAtDuration() }
+                        .onChange(of: timer.endAtMinute) { _, _ in updateEndAtDuration() }
+                        .onChange(of: timer.endAtIsPM) { _, _ in updateEndAtDuration() }
+                    } else {
+                        // Clickable digits for duration
+                        HStack(spacing: 0) {
+                            TimeDigitField(value: $timer.selectedHours, maxValue: 168, isFocused: focusedField == .hours, size: height * 0.22, onSubmit: { timer.start() })
+                                .focused($focusedField, equals: .hours)
+                            Text(":")
+                                .font(.system(size: digitFontSize, weight: .thin))
+                                .foregroundStyle(.white)
+                                .frame(width: height * 0.05)
                                 .transition(.opacity.combined(with: .scale))
-                            TimeDigitField(value: $timer.selectedMinutes, maxValue: 99, isFocused: focusedField == .minutes, size: size * 0.22, onSubmit: { timer.start() })
+                            TimeDigitField(value: $timer.selectedMinutes, maxValue: 99, isFocused: focusedField == .minutes, size: height * 0.22, onSubmit: { timer.start() })
                                 .focused($focusedField, equals: .minutes)
                             Text(":")
                                 .font(.system(size: digitFontSize, weight: .thin))
                                 .foregroundStyle(.white)
-                                .frame(width: size * 0.05)
+                                .frame(width: height * 0.05)
                                 .transition(.opacity.combined(with: .scale))
-                            TimeDigitField(value: $timer.selectedSeconds, maxValue: 99, isFocused: focusedField == .seconds, size: size * 0.22, onSubmit: { timer.start() })
+                            TimeDigitField(value: $timer.selectedSeconds, maxValue: 99, isFocused: focusedField == .seconds, size: height * 0.22, onSubmit: { timer.start() })
                                 .focused($focusedField, equals: .seconds)
                         }
                     }
 
                     // Options - compact circles in row
-                    HStack(spacing: size * 0.02) {
-                        let circleSize = size * 0.10
+                    HStack(spacing: height * 0.02) {
+                        let circleSize = height * 0.10
 
                         // Sound picker
                         Menu {
@@ -876,10 +978,10 @@ struct TimerCardView: View {
                             let displayName = timer.selectedAlarmSound
                                 .replacingOccurrences(of: " (Default)", with: "")
                             Text(displayName == "No Sound" ? "Mute" : displayName)
-                                .font(.system(size: size * 0.035, weight: .medium))
+                                .font(.system(size: height * 0.035, weight: .medium))
                                 .foregroundStyle(.white.opacity(0.7))
-                                .padding(.horizontal, size * 0.025)
-                                .padding(.vertical, size * 0.015)
+                                .padding(.horizontal, height * 0.025)
+                                .padding(.vertical, height * 0.015)
                                 .background(Capsule().fill(Color(white: 0.2)))
                         }
                         .menuStyle(.borderlessButton)
@@ -897,7 +999,7 @@ struct TimerCardView: View {
                                 Circle().fill(Color(white: 0.2))
                                     .frame(width: circleSize, height: circleSize)
                                 Text("\(timer.alarmDuration)s")
-                                    .font(.system(size: size * 0.04, weight: .medium))
+                                    .font(.system(size: height * 0.04, weight: .medium))
                                     .foregroundStyle(.white.opacity(0.7))
                             }
                         }
@@ -908,47 +1010,52 @@ struct TimerCardView: View {
                         // Loop toggle
                         Button(action: { timer.isLooping.toggle() }) {
                             Text("Loop")
-                                .font(.system(size: size * 0.035, weight: .medium))
+                                .font(.system(size: height * 0.035, weight: .medium))
                                 .foregroundStyle(timer.isLooping ? .white : .white.opacity(0.7))
-                                .padding(.horizontal, size * 0.025)
-                                .padding(.vertical, size * 0.015)
+                                .padding(.horizontal, height * 0.025)
+                                .padding(.vertical, height * 0.015)
                                 .background(Capsule().fill(timer.isLooping ? Color.red : Color(white: 0.2)))
                         }
                         .buttonStyle(.plain)
                     }
                 } else if timer.timerState == .alarming {
                     // Alarming: show bell with end time below, tap to dismiss
-                    VStack(spacing: size * 0.02) {
+                    VStack(spacing: height * 0.02) {
                         Image(systemName: "bell.fill")
-                            .font(.system(size: size * 0.3))
+                            .font(.system(size: height * 0.3))
                             .foregroundStyle(.red)
                             .symbolEffect(.pulse, options: .repeating, isActive: timer.isAlarmRinging)
 
                         // End time hung below bell
-                        HStack(spacing: size * 0.01) {
+                        HStack(spacing: height * 0.01) {
                             Image(systemName: "bell.fill")
-                                .font(.system(size: size * 0.025))
+                                .font(.system(size: height * 0.025))
                             Text(getEndTimeString())
-                                .font(.system(size: size * 0.035, weight: .medium))
+                                .font(.system(size: height * 0.035, weight: .medium))
                         }
                         .foregroundStyle(.white.opacity(0.5))
 
                         // Repeat button
                         Button(action: {
                             timer.dismissAlarm()
-                            timer.timeRemaining = timer.initialSetSeconds
-                            timer.endTime = Date().addingTimeInterval(timer.initialSetSeconds)
+                            if timer.useEndAtMode {
+                                // Recalculate duration for next occurrence of End At time
+                                updateEndAtDuration()
+                                timer.initialSetSeconds = timer.totalSetSeconds
+                            }
+                            timer.timeRemaining = timer.useEndAtMode ? timer.totalSetSeconds : timer.initialSetSeconds
+                            timer.endTime = Date().addingTimeInterval(timer.timeRemaining)
                             timer.timerState = .running
                         }) {
-                            HStack(spacing: size * 0.01) {
+                            HStack(spacing: height * 0.01) {
                                 Image(systemName: "repeat")
-                                    .font(.system(size: size * 0.03))
+                                    .font(.system(size: height * 0.03))
                                 Text("Repeat")
-                                    .font(.system(size: size * 0.04, weight: .medium))
+                                    .font(.system(size: height * 0.04, weight: .medium))
                             }
                             .foregroundStyle(.red)
-                            .padding(.horizontal, size * 0.04)
-                            .padding(.vertical, size * 0.02)
+                            .padding(.horizontal, height * 0.04)
+                            .padding(.vertical, height * 0.02)
                             .background(Color.red.opacity(0.2))
                             .clipShape(Capsule())
                         }
@@ -958,44 +1065,56 @@ struct TimerCardView: View {
                         timer.dismissAlarm()
                     }
                 } else {
-                    // Running/Paused: clock with info below
-                    VStack(spacing: size * 0.02) {
-                        ZStack {
-                            AnalogTimerView(
-                                remainingSeconds: timer.timeRemaining,
-                                clockfaceSeconds: timer.effectiveClockface.seconds,
-                                pieColor: timer.effectiveColor,
-                                onSetTime: { seconds in
-                                    timer.timeRemaining = max(1, seconds)
-                                    timer.endTime = Date().addingTimeInterval(seconds)
+                    // Running/Paused: two column layout (golden ratio ~62:38)
+                    VStack(spacing: height * 0.02) {
+                        HStack(alignment: .center, spacing: height * 0.02) {
+                            // Left column: clock (golden ratio square ~62%)
+                            ZStack {
+                                AnalogTimerView(
+                                    remainingSeconds: timer.timeRemaining,
+                                    clockfaceSeconds: timer.effectiveClockface.seconds,
+                                    pieColor: timer.effectiveColor,
+                                    onSetTime: { seconds in
+                                        timer.timeRemaining = max(1, seconds)
+                                        timer.endTime = Date().addingTimeInterval(seconds)
+                                    }
+                                )
+                                .frame(width: clockSize, height: clockSize)
+
+                                // Watchface label - above center dot
+                                Text(timer.effectiveClockface.label)
+                                    .font(.system(size: clockSize * 0.07, weight: .medium))
+                                    .foregroundStyle(.black.opacity(0.5))
+                                    .offset(y: -clockSize * 0.12)
+
+                                // Initial set time - below center dot
+                                Text(timer.initialTimeFormatted)
+                                    .font(.system(size: clockSize * 0.07, weight: .medium))
+                                    .foregroundStyle(.black.opacity(0.5))
+                                    .offset(y: clockSize * 0.12)
+                            }
+
+                            // Right column: end time and countdown
+                            VStack(alignment: .leading, spacing: height * 0.01) {
+                                // Bell with end time
+                                HStack(spacing: height * 0.015) {
+                                    Image(systemName: timer.selectedAlarmSound == "No Sound" ? "bell.slash.fill" : "bell.fill")
+                                        .font(.system(size: height * 0.03))
+                                    Text(getEndTimeString())
+                                        .font(.system(size: height * 0.04, weight: .medium))
                                 }
-                            )
-                            .frame(width: clockSize, height: clockSize)
+                                .foregroundStyle(.white.opacity(0.5))
 
-                            // Initial set time - inside clock face
-                            Text(timer.initialTimeFormatted)
-                                .font(.system(size: clockSize * 0.07, weight: .medium))
-                                .foregroundStyle(.black.opacity(0.5))
-                                .offset(y: clockSize * 0.12)
+                                // Countdown
+                                Text(formatDuration(timer.timeRemaining))
+                                    .font(.system(size: height * 0.10, weight: .bold))
+                                    .foregroundStyle(.white)
+                            }
                         }
-
-                        // Bell with end time
-                        HStack(spacing: size * 0.015) {
-                            Image(systemName: timer.selectedAlarmSound == "No Sound" ? "bell.slash.fill" : "bell.fill")
-                                .font(.system(size: size * 0.03))
-                            Text(getEndTimeString())
-                                .font(.system(size: size * 0.04, weight: .medium))
-                        }
-                        .foregroundStyle(.white.opacity(0.5))
-
-                        // Countdown
-                        Text(formatDuration(timer.timeRemaining))
-                            .font(.system(size: size * 0.08, weight: .bold))
-                            .foregroundStyle(.white)
 
                         // Sound, Duration, Loop controls
-                        HStack(spacing: size * 0.04) {
-                            let circleSize = size * 0.10
+                        HStack(spacing: height * 0.04) {
+                            let circleSize = height * 0.10
 
                             // Sound picker
                             Menu {
@@ -1014,10 +1133,10 @@ struct TimerCardView: View {
                                 let displayName = timer.selectedAlarmSound
                                     .replacingOccurrences(of: " (Default)", with: "")
                                 Text(displayName == "No Sound" ? "Mute" : displayName)
-                                    .font(.system(size: size * 0.035, weight: .medium))
+                                    .font(.system(size: height * 0.035, weight: .medium))
                                     .foregroundStyle(.white.opacity(0.7))
-                                    .padding(.horizontal, size * 0.025)
-                                    .padding(.vertical, size * 0.015)
+                                    .padding(.horizontal, height * 0.025)
+                                    .padding(.vertical, height * 0.015)
                                     .background(Capsule().fill(Color(white: 0.2)))
                             }
                             .menuStyle(.borderlessButton)
@@ -1035,7 +1154,7 @@ struct TimerCardView: View {
                                     Circle().fill(Color(white: 0.2))
                                         .frame(width: circleSize, height: circleSize)
                                     Text("\(timer.alarmDuration)s")
-                                        .font(.system(size: size * 0.042, weight: .medium))
+                                        .font(.system(size: height * 0.042, weight: .medium))
                                         .foregroundStyle(.white.opacity(0.7))
                                 }
                             }
@@ -1046,10 +1165,10 @@ struct TimerCardView: View {
                             // Loop toggle
                             Button(action: { timer.isLooping.toggle() }) {
                                 Text("Loop")
-                                    .font(.system(size: size * 0.035, weight: .medium))
+                                    .font(.system(size: height * 0.035, weight: .medium))
                                     .foregroundStyle(timer.isLooping ? .white : .white.opacity(0.7))
-                                    .padding(.horizontal, size * 0.025)
-                                    .padding(.vertical, size * 0.015)
+                                    .padding(.horizontal, height * 0.025)
+                                    .padding(.vertical, height * 0.015)
                                     .background(Capsule().fill(timer.isLooping ? Color.red : Color(white: 0.2)))
                             }
                             .buttonStyle(.plain)
@@ -1063,31 +1182,23 @@ struct TimerCardView: View {
                 VStack {
                     HStack {
                         // Clockface toggle and label - top left, stacked
-                        VStack(alignment: .leading, spacing: size * 0.01) {
+                        VStack(alignment: .leading, spacing: height * 0.01) {
                             Button(action: {
-                                if !timer.useAutoClockface {
-                                    cycleClockface()
+                                if timer.useAutoClockface {
+                                    timer.useAutoClockface = false
                                 }
+                                cycleClockface()
                             }) {
                                 Text("\(timer.effectiveClockface.label) Watchface")
-                                    .font(.system(size: size * 0.035, weight: .medium))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, size * 0.04)
-                                    .padding(.vertical, size * 0.02)
-                                    .background(Color(white: 0.2))
-                                    .clipShape(Capsule())
+                                    .font(.system(size: height * 0.035, weight: .medium))
+                                    .foregroundStyle(.white.opacity(0.6))
                             }
                             .buttonStyle(.plain)
 
                             TextField("Timer", text: $timer.timerLabel)
-                                .font(.system(size: size * 0.035, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.8))
+                                .font(.system(size: height * 0.035, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.6))
                                 .textFieldStyle(.plain)
-                                .frame(width: size * 0.35)
-                                .padding(.horizontal, size * 0.04)
-                                .padding(.vertical, size * 0.02)
-                                .background(Color(white: 0.2))
-                                .clipShape(Capsule())
                         }
                         Spacer()
                     }
@@ -1112,9 +1223,6 @@ struct TimerCardView: View {
                             Text(timer.timerState == .idle ? "Delete" : "Cancel")
                                 .font(.system(size: buttonFontSize, weight: .medium))
                                 .foregroundStyle(timer.timerState == .idle && onDelete == nil ? .gray : .red)
-                                .frame(width: buttonWidth, height: buttonHeight)
-                                .background(Color.red.opacity(timer.timerState == .idle && onDelete == nil ? 0.1 : 0.3))
-                                .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
                         .disabled(timer.timerState == .idle && onDelete == nil)
@@ -1125,9 +1233,6 @@ struct TimerCardView: View {
                             Text(rightButtonLabel)
                                 .font(.system(size: buttonFontSize, weight: .medium))
                                 .foregroundStyle(timer.timerState == .idle && timer.totalSetSeconds == 0 ? .gray : rightButtonColor)
-                                .frame(width: buttonWidth, height: buttonHeight)
-                                .background(rightButtonColor.opacity(timer.timerState == .idle && timer.totalSetSeconds == 0 ? 0.1 : 0.3))
-                                .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
                         .disabled(timer.timerState == .idle && timer.totalSetSeconds == 0)
@@ -1148,13 +1253,39 @@ struct TimerCardView: View {
                 }
             }
         }
-        .frame(width: size, height: size)
-        .background(Color(white: 0.1))
+        .frame(width: width, height: height)
+        .background(
+            ZStack(alignment: .bottom) {
+                // Base background
+                Color(white: 0.1)
+
+                // Water fill - matches watchface scale (only when running/paused)
+                if timer.timerState == .running || timer.timerState == .paused {
+                    let clockfaceSeconds = timer.effectiveClockface.seconds
+                    let progress = 1.0 - (timer.timeRemaining / clockfaceSeconds)
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: timer.effectiveColor, location: 0),
+                                    .init(color: timer.effectiveColor.opacity(0.8), location: 0.5),
+                                    .init(color: timer.effectiveColor.opacity(0.4), location: 0.85),
+                                    .init(color: .clear, location: 1)
+                                ],
+                                startPoint: .bottom,
+                                endPoint: .top
+                            )
+                        )
+                        .frame(height: height * max(0, min(1, progress)))
+                }
+            }
+        )
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .shimmer(active: timer.isInWarningZone)
         .overlay(alignment: .topTrailing) {
             // Top right buttons: menu, add, and color picker stacked
-            VStack(alignment: .trailing, spacing: size * 0.02) {
-                HStack(spacing: size * 0.02) {
+            VStack(alignment: .trailing, spacing: height * 0.02) {
+                HStack(spacing: height * 0.02) {
                     // Menu button (only when running/paused)
                     if timer.timerState == .running || timer.timerState == .paused {
                         Menu {
@@ -1175,9 +1306,9 @@ struct TimerCardView: View {
                             ZStack {
                                 Circle()
                                     .fill(Color(white: 0.2))
-                                    .frame(width: size * 0.10, height: size * 0.10)
+                                    .frame(width: height * 0.10, height: height * 0.10)
                                 Image(systemName: "ellipsis")
-                                    .font(.system(size: size * 0.04, weight: .medium))
+                                    .font(.system(size: height * 0.04, weight: .medium))
                                     .foregroundStyle(.white)
                             }
                         }
@@ -1189,9 +1320,9 @@ struct TimerCardView: View {
                     if let onAdd = onAdd {
                         Button(action: onAdd) {
                             Image(systemName: "plus")
-                                .font(.system(size: size * 0.04, weight: .medium))
+                                .font(.system(size: height * 0.04, weight: .medium))
                                 .foregroundStyle(.white)
-                                .frame(width: size * 0.10, height: size * 0.10)
+                                .frame(width: height * 0.10, height: height * 0.10)
                                 .background(Color(white: 0.2))
                                 .clipShape(Circle())
                         }
@@ -1200,7 +1331,7 @@ struct TimerCardView: View {
                 }
 
             }
-            .padding(size * 0.03)
+            .padding(height * 0.03)
         }
         .clipped()
         .contentShape(Rectangle())
