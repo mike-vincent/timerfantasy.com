@@ -1692,7 +1692,7 @@ struct AnalogTimerView: View {
                 // Background circle (white) - opacity based on time of day
                 Circle()
                     .fill(Color.white.opacity(clockFaceOpacity))
-                    .frame(width: size * 0.65, height: size * 0.65)
+                    .frame(width: size * 0.9, height: size * 0.9)
 
                 // Tick marks - aligned with labels (drawn before red so they're underneath)
                 let labelAngles = clockLabels.map { value -> Double in
@@ -1709,7 +1709,7 @@ struct AnalogTimerView: View {
                     Rectangle()
                         .fill(Color.black.opacity(0.7))
                         .frame(width: size * 0.015, height: size * 0.06)
-                        .offset(y: -(size * 0.29))
+                        .offset(y: -(size * 0.42))
                         .rotationEffect(.degrees(majorAngle))
 
                     // Minor ticks between labels
@@ -1718,7 +1718,7 @@ struct AnalogTimerView: View {
                         Rectangle()
                             .fill(Color.black.opacity(0.7))
                             .frame(width: size * 0.008, height: size * 0.03)
-                            .offset(y: -(size * 0.30))
+                            .offset(y: -(size * 0.43))
                             .rotationEffect(.degrees(minorAngle))
                     }
                 }
@@ -1732,19 +1732,19 @@ struct AnalogTimerView: View {
                         clockwise: true
                     )
                     .fill(pieColor)
-                    .frame(width: size * 0.65, height: size * 0.65)
+                    .frame(width: size * 0.9, height: size * 0.9)
                 }
 
-                // Number labels (CCW from top) - outside the clock
+                // Number labels (CCW from top) - inside the clock
                 ForEach(clockLabels, id: \.self) { value in
                     let position = Double(value) / Double(maxValue)
                     let angle = -position * 360.0 - 90  // CCW
-                    let radius = size * 0.42  // Outside the clock edge
+                    let radius = size * 0.35  // Inside the clock edge
                     let x = radius * cos(angle * .pi / 180)
                     let y = radius * sin(angle * .pi / 180)
                     Text("\(value)")
-                        .font(.system(size: size * 0.08, weight: .bold))
-                        .foregroundColor(.white)
+                        .font(.system(size: size * 0.07, weight: .bold))
+                        .foregroundColor(.black.opacity(0.6))
                         .position(x: size/2 + x, y: size/2 + y)
                 }
 
