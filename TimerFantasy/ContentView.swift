@@ -1054,10 +1054,10 @@ struct TimerCardView: View {
                         timer.dismissAlarm()
                     }
                 } else {
-                    // Running/Paused: two column layout (golden ratio ~62:38)
+                    // Running/Paused: two column layout
                     VStack(spacing: size * 0.02) {
-                        HStack(alignment: .center, spacing: size * 0.02) {
-                            // Left column: clock (golden ratio square ~62%)
+                        HStack(spacing: 0) {
+                            // Left column: clock - centered
                             ZStack {
                                 AnalogTimerView(
                                     remainingSeconds: timer.timeRemaining,
@@ -1082,9 +1082,10 @@ struct TimerCardView: View {
                                     .foregroundStyle(.black.opacity(0.5))
                                     .offset(y: clockSize * 0.12)
                             }
+                            .frame(maxWidth: .infinity)
 
-                            // Right column: end time and countdown
-                            VStack(alignment: .leading, spacing: 4) {
+                            // Right column: end time and countdown - centered
+                            VStack(alignment: .center, spacing: 4) {
                                 // Bell with end time
                                 HStack(spacing: 4) {
                                     Image(systemName: timer.selectedAlarmSound == "No Sound" ? "bell.slash.fill" : "bell.fill")
@@ -1099,6 +1100,7 @@ struct TimerCardView: View {
                                     .font(.system(size: 24, weight: .bold).monospacedDigit())
                                     .foregroundStyle(.white)
                             }
+                            .frame(maxWidth: .infinity)
                         }
 
                         // Sound, Duration, Loop controls
@@ -1739,12 +1741,12 @@ struct AnalogTimerView: View {
                 ForEach(clockLabels, id: \.self) { value in
                     let position = Double(value) / Double(maxValue)
                     let angle = -position * 360.0 - 90  // CCW
-                    let radius = size * 0.35  // Inside the clock edge
+                    let radius = size * 0.32  // Inside the clock edge
                     let x = radius * cos(angle * .pi / 180)
                     let y = radius * sin(angle * .pi / 180)
                     Text("\(value)")
-                        .font(.system(size: size * 0.07, weight: .bold))
-                        .foregroundColor(.black.opacity(0.6))
+                        .font(.system(size: size * 0.09, weight: .heavy))
+                        .foregroundColor(.black)
                         .position(x: size/2 + x, y: size/2 + y)
                 }
 
