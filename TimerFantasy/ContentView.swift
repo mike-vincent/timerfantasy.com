@@ -308,7 +308,7 @@ class TimerModel: ObservableObject, Identifiable {
 
     // Translucent ruby red like litho tape
     var autoColor: Color {
-        .red.opacity(0.9)
+        .red.opacity(0.85)
     }
 
     func start() {
@@ -479,8 +479,7 @@ struct ContentView: View {
 
     private let spacing: CGFloat = 8
     private let columnCount = 2
-    private let baseCardHeight: CGFloat = 200
-    private let baseCardWidth: CGFloat = 400  // 2:1 aspect ratio
+    private let baseCardSize: CGFloat = 200
 
     private var currentAlignment: VerticalAlignment {
         VerticalAlignment(rawValue: verticalAlignment) ?? .middle
@@ -499,8 +498,8 @@ struct ContentView: View {
         var bestRows = itemCount
         var bestRatioDiff = Double.infinity
 
-        // Cards are 2:1 aspect ratio, so grid ratio needs to account for that
-        let cardAspect = 2.0  // width / height
+        // Square cards (1:1 aspect ratio)
+        let cardAspect = 1.0  // width / height
         for testCols in 1...itemCount {
             let testRows = Int(ceil(Double(itemCount) / Double(testCols)))
             let gridRatio = (Double(testCols) * cardAspect) / Double(testRows)
@@ -518,8 +517,8 @@ struct ContentView: View {
         guard let window = NSApplication.shared.windows.first else { return }
         // Allow completely free resizing
         window.resizeIncrements = NSSize(width: 1, height: 1)
-        // Minimum size for one 2:1 card
-        window.minSize = NSSize(width: baseCardWidth + spacing * 2, height: baseCardHeight + spacing * 2 + 28)
+        // Minimum size for one square card
+        window.minSize = NSSize(width: baseCardSize + spacing * 2, height: baseCardSize + spacing * 2 + 28)
     }
 
     var body: some View {
@@ -530,14 +529,14 @@ struct ContentView: View {
             let actualCols = layout.cols
             let actualRows = layout.rows
 
-            // Card size to fill available space based on actual grid dimensions (2:1 aspect ratio)
+            // Card size to fill available space based on actual grid dimensions (square)
             let availableWidth = geo.size.width - spacing * CGFloat(actualCols + 1)
             let availableHeight = geo.size.height - spacing * CGFloat(actualRows + 1)
-            // For 2:1 cards: cardWidth = 2 * cardHeight
             let maxCardWidth = availableWidth / CGFloat(actualCols)
             let maxCardHeight = availableHeight / CGFloat(actualRows)
-            let cardHeight = min(maxCardWidth / 2, maxCardHeight)
-            let cardWidth = cardHeight * 2
+            let cardSize = min(maxCardWidth, maxCardHeight)
+            let cardWidth = cardSize
+            let cardHeight = cardSize
 
             let actualGridWidth = CGFloat(actualCols) * cardWidth + CGFloat(actualCols - 1) * spacing
             let actualGridHeight = CGFloat(actualRows) * cardHeight + CGFloat(actualRows - 1) * spacing
