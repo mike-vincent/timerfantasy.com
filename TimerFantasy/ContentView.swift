@@ -1107,7 +1107,7 @@ struct TimerCardView: View {
 
                                 // Countdown
                                 Text(formatDuration(timer.timeRemaining))
-                                    .font(.system(size: height * 0.10, weight: .bold))
+                                    .font(.system(size: height * 0.28, weight: .bold))
                                     .foregroundStyle(.white)
                             }
                         }
