@@ -1269,9 +1269,9 @@ struct TimerCardView: View {
                             ZStack {
                                 Circle()
                                     .fill(Color(white: 0.2))
-                                    .frame(width: size * 0.10, height: size * 0.10)
+                                    .frame(width: size * 0.12, height: size * 0.12)
                                 Image(systemName: "ellipsis")
-                                    .font(.system(size: size * 0.04, weight: .medium))
+                                    .font(.system(size: size * 0.05, weight: .medium))
                                     .foregroundStyle(.white)
                             }
                         }
@@ -1283,9 +1283,9 @@ struct TimerCardView: View {
                     if let onAdd = onAdd {
                         Button(action: onAdd) {
                             Image(systemName: "plus")
-                                .font(.system(size: size * 0.04, weight: .medium))
+                                .font(.system(size: size * 0.05, weight: .medium))
                                 .foregroundStyle(.white)
-                                .frame(width: size * 0.10, height: size * 0.10)
+                                .frame(width: size * 0.12, height: size * 0.12)
                                 .background(Color(white: 0.2))
                                 .clipShape(Circle())
                         }
