@@ -1234,68 +1234,64 @@ struct TimerCardView: View {
                     Button("Keep Running", role: .cancel) {}
                 }
             }
-        }
-        .frame(width: size, height: size)
-        .background(
-            ZStack(alignment: .bottom) {
-                // Base background
-                Color(white: 0.1)
 
-            }
-        )
-        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .shimmer(active: timer.isInWarningZone)
-        .overlay(alignment: .topTrailing) {
-            // Top right buttons: menu, add, and color picker stacked
-            VStack(alignment: .trailing, spacing: size * 0.02) {
-                HStack(spacing: size * 0.02) {
-                    // Menu button (only when running/paused)
-                    if timer.timerState == .running || timer.timerState == .paused {
-                        Menu {
-                            Button(action: { copyTimerAsMarkdown() }) {
-                                Label("Copy as Markdown", systemImage: "doc.on.doc")
+            // Top right buttons: menu and add
+            VStack {
+                HStack {
+                    Spacer()
+                    HStack(spacing: size * 0.02) {
+                        // Menu button (only when running/paused)
+                        if timer.timerState == .running || timer.timerState == .paused {
+                            Menu {
+                                Button(action: { copyTimerAsMarkdown() }) {
+                                    Label("Copy as Markdown", systemImage: "doc.on.doc")
+                                }
+                                Divider()
+                                Button(action: { timer.useAutoColor.toggle() }) {
+                                    Label("Auto Color", systemImage: timer.useAutoColor ? "checkmark.circle.fill" : "circle")
+                                }
+                                Button(action: { timer.useAutoClockface.toggle() }) {
+                                    Label("Auto Zoom", systemImage: timer.useAutoClockface ? "checkmark.circle.fill" : "circle")
+                                }
+                                Button(action: { timer.useFlashWarning.toggle() }) {
+                                    Label("Flash Warning", systemImage: timer.useFlashWarning ? "checkmark.circle.fill" : "circle")
+                                }
+                            } label: {
+                                ZStack {
+                                    Circle()
+                                        .fill(Color(white: 0.2))
+                                        .frame(width: size * 0.12, height: size * 0.12)
+                                    Image(systemName: "ellipsis")
+                                        .font(.system(size: size * 0.05, weight: .medium))
+                                        .foregroundStyle(.white)
+                                }
                             }
-                            Divider()
-                            Button(action: { timer.useAutoColor.toggle() }) {
-                                Label("Auto Color", systemImage: timer.useAutoColor ? "checkmark.circle.fill" : "circle")
-                            }
-                            Button(action: { timer.useAutoClockface.toggle() }) {
-                                Label("Auto Zoom", systemImage: timer.useAutoClockface ? "checkmark.circle.fill" : "circle")
-                            }
-                            Button(action: { timer.useFlashWarning.toggle() }) {
-                                Label("Flash Warning", systemImage: timer.useFlashWarning ? "checkmark.circle.fill" : "circle")
-                            }
-                        } label: {
-                            ZStack {
-                                Circle()
-                                    .fill(Color(white: 0.2))
-                                    .frame(width: size * 0.12, height: size * 0.12)
-                                Image(systemName: "ellipsis")
+                            .menuStyle(.borderlessButton)
+                            .menuIndicator(.hidden)
+                        }
+
+                        // Add button
+                        if let onAdd = onAdd {
+                            Button(action: onAdd) {
+                                Image(systemName: "plus")
                                     .font(.system(size: size * 0.05, weight: .medium))
                                     .foregroundStyle(.white)
+                                    .frame(width: size * 0.12, height: size * 0.12)
+                                    .background(Color(white: 0.2))
+                                    .clipShape(Circle())
                             }
+                            .buttonStyle(.plain)
                         }
-                        .menuStyle(.borderlessButton)
-                        .menuIndicator(.hidden)
-                    }
-
-                    // Add button
-                    if let onAdd = onAdd {
-                        Button(action: onAdd) {
-                            Image(systemName: "plus")
-                                .font(.system(size: size * 0.05, weight: .medium))
-                                .foregroundStyle(.white)
-                                .frame(width: size * 0.12, height: size * 0.12)
-                                .background(Color(white: 0.2))
-                                .clipShape(Circle())
-                        }
-                        .buttonStyle(.plain)
                     }
                 }
-
+                Spacer()
             }
-            .padding(size * 0.03)
+            .padding(padding)
         }
+        .frame(width: size, height: size)
+        .background(Color(white: 0.1))
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        .shimmer(active: timer.isInWarningZone)
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture {
