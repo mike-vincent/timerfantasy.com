@@ -306,9 +306,9 @@ class TimerModel: ObservableObject, Identifiable {
         useAutoColor ? autoColor : timerColor
     }
 
-    // Solid red for watchface
+    // Translucent ruby red like litho tape
     var autoColor: Color {
-        .red
+        .red.opacity(0.7)
     }
 
     func start() {
