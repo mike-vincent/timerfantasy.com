@@ -1243,7 +1243,7 @@ struct TimerCardView: View {
                     HStack(spacing: size * 0.02) {
                         // Menu button (only when running/paused)
                         if timer.timerState == .running || timer.timerState == .paused {
-                            Button(action: { }) {
+                            Button(action: { showOptionsMenu = true }) {
                                 Image(systemName: "ellipsis")
                                     .font(.system(size: size * 0.05, weight: .medium))
                                     .foregroundStyle(.white)
@@ -1252,6 +1252,24 @@ struct TimerCardView: View {
                                     .clipShape(Circle())
                             }
                             .buttonStyle(.plain)
+                            .popover(isPresented: $showOptionsMenu) {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Button(action: { copyTimerAsMarkdown(); showOptionsMenu = false }) {
+                                        Label("Copy as Markdown", systemImage: "doc.on.doc")
+                                    }
+                                    Divider()
+                                    Button(action: { timer.useAutoColor.toggle() }) {
+                                        Label("Auto Color", systemImage: timer.useAutoColor ? "checkmark.circle.fill" : "circle")
+                                    }
+                                    Button(action: { timer.useAutoClockface.toggle() }) {
+                                        Label("Auto Zoom", systemImage: timer.useAutoClockface ? "checkmark.circle.fill" : "circle")
+                                    }
+                                    Button(action: { timer.useFlashWarning.toggle() }) {
+                                        Label("Flash Warning", systemImage: timer.useFlashWarning ? "checkmark.circle.fill" : "circle")
+                                    }
+                                }
+                                .padding()
+                            }
                         }
 
                         // Add button
