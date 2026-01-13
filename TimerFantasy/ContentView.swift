@@ -2,48 +2,6 @@ import SwiftUI
 import Combine
 import AppKit
 
-// MARK: - Shimmer Effect Modifier
-struct ShimmerModifier: ViewModifier {
-    let isActive: Bool
-    @State private var phase: CGFloat = 0
-
-    func body(content: Content) -> some View {
-        content
-            .overlay(
-                GeometryReader { geo in
-                    if isActive {
-                        LinearGradient(
-                            stops: [
-                                .init(color: .clear, location: 0),
-                                .init(color: .white.opacity(0.15), location: 0.3),
-                                .init(color: .white.opacity(0.25), location: 0.5),
-                                .init(color: .white.opacity(0.15), location: 0.7),
-                                .init(color: .clear, location: 1)
-                            ],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: geo.size.width)
-                        .offset(x: -geo.size.width + phase * geo.size.width * 2)
-                        .blendMode(.softLight)
-                        .onAppear {
-                            withAnimation(.easeInOut(duration: 2).repeatForever(autoreverses: false)) {
-                                phase = 1
-                            }
-                        }
-                    }
-                }
-            )
-            .clipped()
-    }
-}
-
-extension View {
-    func shimmer(active: Bool) -> some View {
-        modifier(ShimmerModifier(isActive: active))
-    }
-}
-
 // MARK: - Persistable Timer Data
 struct TimerData: Codable, Identifiable {
     let id: UUID
@@ -62,7 +20,6 @@ struct TimerData: Codable, Identifiable {
     var timerColorHex: String?  // Hex string for pie slice color
     var useAutoColor: Bool?
     var useAutoClockface: Bool?
-    var useFlashWarning: Bool?
     // End At mode settings
     var useEndAtMode: Bool?
     var endAtHour: Int?
@@ -140,7 +97,6 @@ class TimerStore: ObservableObject {
                 timerColorHex: timer.timerColor.hexString,
                 useAutoColor: timer.useAutoColor,
                 useAutoClockface: timer.useAutoClockface,
-                useFlashWarning: timer.useFlashWarning,
                 useEndAtMode: timer.useEndAtMode,
                 endAtHour: timer.endAtHour,
                 endAtMinute: timer.endAtMinute,
@@ -185,9 +141,6 @@ class TimerStore: ObservableObject {
             }
             if let useAutoClockface = data.useAutoClockface {
                 timer.useAutoClockface = useAutoClockface
-            }
-            if let useFlashWarning = data.useFlashWarning {
-                timer.useFlashWarning = useFlashWarning
             }
             if let useEndAtMode = data.useEndAtMode {
                 timer.useEndAtMode = useEndAtMode
@@ -254,7 +207,6 @@ class TimerModel: ObservableObject, Identifiable {
     @Published var timerColor: Color = .orange  // Pie slice color (manual)
     @Published var useAutoColor: Bool = true  // Auto rainbow color based on time remaining
     @Published var useAutoClockface: Bool = true  // Auto-shrink watchface as time decreases
-    @Published var useFlashWarning: Bool = true  // Flash in last 5%
     // End At mode settings
     @Published var useEndAtMode: Bool = false
     @Published var endAtHour: Int = 12
@@ -283,6 +235,20 @@ class TimerModel: ObservableObject, Identifiable {
         }
     }
 
+    // Compact format for default timer name: "30s Timer", "2m35s Timer", "1h30m Timer"
+    var defaultTimerName: String {
+        let total = Int(initialSetSeconds)
+        let h = total / 3600
+        let m = (total % 3600) / 60
+        let s = total % 60
+        var parts: [String] = []
+        if h > 0 { parts.append("\(h)h") }
+        if m > 0 { parts.append("\(m)m") }
+        if s > 0 && h == 0 { parts.append("\(s)s") }  // Only show seconds if no hours
+        if parts.isEmpty { parts.append("0s") }
+        return parts.joined() + " Timer"
+    }
+
     // Auto-select smallest watchface that fits remaining time
     var autoClockface: ClockfaceScale {
         ClockfaceScale.allCases.last { $0.seconds >= timeRemaining } ?? .hours96
@@ -291,14 +257,6 @@ class TimerModel: ObservableObject, Identifiable {
     // Effective clockface (auto or manual)
     var effectiveClockface: ClockfaceScale {
         useAutoClockface ? autoClockface : selectedClockface
-    }
-
-    // Whether we're in the warning zone (last 5% of watchface)
-    var isInWarningZone: Bool {
-        guard useFlashWarning else { return false }
-        let clockfaceSeconds = effectiveClockface.seconds
-        let percent = clockfaceSeconds > 0 ? timeRemaining / clockfaceSeconds : 1.0
-        return percent < 0.05
     }
 
     // Effective color (auto or manual)
@@ -1086,139 +1044,112 @@ struct TimerCardView: View {
                         // Info below watchface
                         VStack(spacing: size * 0.01) {
                             // Bell with end time
-                            HStack(spacing: size * 0.01) {
+                            HStack(spacing: size * 0.015) {
                                 Image(systemName: timer.selectedAlarmSound == "No Sound" ? "bell.slash.fill" : "bell.fill")
-                                    .font(.system(size: size * 0.03))
+                                    .font(.system(size: size * 0.05))
                                 Text(getEndTimeString())
-                                    .font(.system(size: size * 0.035, weight: .medium))
+                                    .font(.system(size: size * 0.055, weight: .medium))
                             }
                             .foregroundStyle(.white.opacity(0.5))
 
                             // Countdown
                             Text(formatDuration(timer.timeRemaining))
-                                .font(.system(size: size * 0.08, weight: .bold).monospacedDigit())
+                                .font(.system(size: size * 0.14, weight: .bold).monospacedDigit())
                                 .foregroundStyle(.white)
                         }
                     }
                 }
             }
 
-            // Top left: clockface, label, and controls - only when running/paused
+            // Top row: stop button left, label center - only when running/paused
             if timer.timerState == .running || timer.timerState == .paused {
                 VStack {
                     HStack {
-                        VStack(alignment: .leading, spacing: size * 0.01) {
-                            Button(action: {
-                                if timer.useAutoClockface {
-                                    timer.useAutoClockface = false
-                                }
-                                cycleClockface()
-                            }) {
-                                Text("\(timer.effectiveClockface.label) Watchface")
-                                    .font(.system(size: size * 0.035, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.6))
-                            }
-                            .buttonStyle(.plain)
-
-                            TextField("Timer", text: $timer.timerLabel)
-                                .font(.system(size: size * 0.035, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.6))
-                                .textFieldStyle(.plain)
-
-                            // Sound, Duration, Loop controls
-                            HStack(spacing: size * 0.015) {
-                                // Sound picker
-                                Menu {
-                                    ForEach(alarmSounds, id: \.self) { sound in
-                                        Button(sound) {
-                                            timer.selectedAlarmSound = sound
-                                            if sound != "No Sound" {
-                                                let soundName = sound.replacingOccurrences(of: " (Default)", with: "")
-                                                if let s = NSSound(named: NSSound.Name(soundName)) {
-                                                    s.play()
-                                                }
-                                            }
-                                        }
-                                    }
-                                } label: {
-                                    let displayName = timer.selectedAlarmSound
-                                        .replacingOccurrences(of: " (Default)", with: "")
-                                    Text(displayName == "No Sound" ? "Mute" : displayName)
-                                        .font(.system(size: size * 0.03, weight: .medium))
-                                        .foregroundStyle(.white.opacity(0.7))
-                                        .padding(.horizontal, size * 0.012)
-                                        .padding(.vertical, size * 0.006)
-                                        .background(Capsule().fill(Color(white: 0.2)))
-                                }
-                                .menuStyle(.borderlessButton)
-                                .menuIndicator(.hidden)
-
-                                // Duration picker
-                                Menu {
-                                    ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
-                                        Button("\(seconds)s") {
-                                            timer.alarmDuration = seconds
-                                        }
-                                    }
-                                } label: {
-                                    Text("\(timer.alarmDuration)s")
-                                        .font(.system(size: size * 0.03, weight: .medium))
-                                        .foregroundStyle(.white.opacity(0.7))
-                                        .padding(.horizontal, size * 0.012)
-                                        .padding(.vertical, size * 0.006)
-                                        .background(Capsule().fill(Color(white: 0.2)))
-                                }
-                                .menuStyle(.borderlessButton)
-                                .menuIndicator(.hidden)
-
-                                // Loop toggle
-                                Button(action: { timer.isLooping.toggle() }) {
-                                    Text("Loop")
-                                        .font(.system(size: size * 0.03, weight: .medium))
-                                        .foregroundStyle(timer.isLooping ? .white : .white.opacity(0.7))
-                                        .padding(.horizontal, size * 0.012)
-                                        .padding(.vertical, size * 0.006)
-                                        .background(Capsule().fill(timer.isLooping ? Color.red : Color(white: 0.2)))
-                                }
-                                .buttonStyle(.plain)
-                            }
+                        Button(action: { showCancelConfirmation = true }) {
+                            Image(systemName: "xmark")
+                                .font(.system(size: size * 0.05, weight: .medium))
+                                .foregroundStyle(.white)
+                                .frame(width: size * 0.12, height: size * 0.12)
+                                .background(Color(white: 0.2))
+                                .clipShape(Circle())
                         }
+                        .buttonStyle(.plain)
+
                         Spacer()
+
+                        // Timer label - center
+                        Text(timer.timerLabel.isEmpty ? timer.defaultTimerName : timer.timerLabel)
+                            .font(.system(size: size * 0.06, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .lineLimit(1)
+                            .onTapGesture {
+                                isEditingLabel = true
+                            }
+                            .popover(isPresented: $isEditingLabel) {
+                                TextField("Timer", text: $timer.timerLabel)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 150)
+                                    .padding()
+                            }
+
+                        Spacer()
+
+                        // Placeholder to balance layout (same width as X button)
+                        Color.clear
+                            .frame(width: size * 0.12, height: size * 0.12)
                     }
                     Spacer()
                 }
                 .padding(padding)
-                .zIndex(-1)
             }
 
-            // Bottom buttons - Delete/Cancel left, Start/Pause right (hide when alarming)
+            // Bottom buttons - Delete left (idle), Play/Pause (hide when alarming)
             if timer.timerState != .alarming {
                 VStack {
                     Spacer()
-                    HStack {
-                        Button(action: {
-                            if timer.timerState == .idle {
-                                showDeleteConfirmation = true
-                            } else {
-                                showCancelConfirmation = true
+                    if timer.timerState == .idle {
+                        // Idle: Delete left, Play right
+                        HStack {
+                            Button(action: { showDeleteConfirmation = true }) {
+                                Image(systemName: "trash")
+                                    .font(.system(size: size * 0.05, weight: .medium))
+                                    .foregroundStyle(onDelete == nil ? .gray : .red)
+                                    .frame(width: size * 0.12, height: size * 0.12)
+                                    .background(Color(white: 0.2))
+                                    .clipShape(Circle())
                             }
-                        }) {
-                            Text(timer.timerState == .idle ? "Delete" : "Cancel")
-                                .font(.system(size: buttonFontSize, weight: .medium))
-                                .foregroundStyle(timer.timerState == .idle && onDelete == nil ? .gray : .red)
+                            .buttonStyle(.plain)
+                            .disabled(onDelete == nil)
+
+                            Spacer()
+
+                            Button(action: toggleTimer) {
+                                Image(systemName: "play.fill")
+                                    .font(.system(size: size * 0.05, weight: .medium))
+                                    .foregroundStyle(timer.totalSetSeconds == 0 ? .gray : rightButtonColor)
+                                    .frame(width: size * 0.12, height: size * 0.12)
+                                    .background(Color(white: 0.2))
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(timer.totalSetSeconds == 0)
                         }
-                        .buttonStyle(.plain)
-                        .disabled(timer.timerState == .idle && onDelete == nil)
-
-                        Spacer()
-
+                    } else {
+                        // Running/Paused: Full width pause/play button
                         Button(action: toggleTimer) {
-                            Text(rightButtonLabel)
-                                .font(.system(size: buttonFontSize, weight: .medium))
-                                .foregroundStyle(timer.timerState == .idle && timer.totalSetSeconds == 0 ? .gray : rightButtonColor)
+                            HStack(spacing: size * 0.02) {
+                                Image(systemName: timer.timerState == .running ? "pause.fill" : "play.fill")
+                                    .font(.system(size: size * 0.05, weight: .medium))
+                                Text(timer.timerState == .running ? "Pause" : "Play")
+                                    .font(.system(size: size * 0.04, weight: .medium))
+                            }
+                            .foregroundStyle(rightButtonColor)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: size * 0.12)
+                            .background(Color(white: 0.2))
+                            .clipShape(Capsule())
                         }
                         .buttonStyle(.plain)
-                        .disabled(timer.timerState == .idle && timer.totalSetSeconds == 0)
                     }
                 }
                 .padding(padding)
@@ -1236,47 +1167,122 @@ struct TimerCardView: View {
                 }
             }
 
-            // Top right buttons: menu and add
+            // Top right buttons: menu, add, and watchface
             VStack {
                 HStack {
                     Spacer()
-                    HStack(spacing: size * 0.02) {
-                        // Menu button (only when running/paused)
-                        if timer.timerState == .running || timer.timerState == .paused {
-                            Button(action: { showOptionsMenu = true }) {
-                                Image(systemName: "ellipsis")
-                                    .font(.system(size: size * 0.05, weight: .medium))
-                                    .foregroundStyle(.white)
-                                    .frame(width: size * 0.12, height: size * 0.12)
-                                    .background(Color(white: 0.2))
-                                    .clipShape(Circle())
-                            }
-                            .buttonStyle(.plain)
-                            .popover(isPresented: $showOptionsMenu) {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Button(action: { copyTimerAsMarkdown(); showOptionsMenu = false }) {
-                                        Label("Copy as Markdown", systemImage: "doc.on.doc")
-                                    }
-                                    Divider()
-                                    Button(action: { timer.useAutoColor.toggle() }) {
-                                        Label("Auto Color", systemImage: timer.useAutoColor ? "checkmark.circle.fill" : "circle")
-                                    }
-                                    Button(action: { timer.useAutoClockface.toggle() }) {
-                                        Label("Auto Zoom", systemImage: timer.useAutoClockface ? "checkmark.circle.fill" : "circle")
-                                    }
-                                    Button(action: { timer.useFlashWarning.toggle() }) {
-                                        Label("Flash Warning", systemImage: timer.useFlashWarning ? "checkmark.circle.fill" : "circle")
-                                    }
+                    VStack(alignment: .trailing, spacing: size * 0.02) {
+                        HStack(spacing: size * 0.02) {
+                            // Menu button (only when running/paused)
+                            if timer.timerState == .running || timer.timerState == .paused {
+                                Button(action: { showOptionsMenu = true }) {
+                                    Image(systemName: "ellipsis")
+                                        .font(.system(size: size * 0.05, weight: .medium))
+                                        .foregroundStyle(.white)
+                                        .frame(width: size * 0.12, height: size * 0.12)
+                                        .background(Color(white: 0.2))
+                                        .clipShape(Circle())
                                 }
-                                .padding()
+                                .buttonStyle(.plain)
+                                .popover(isPresented: $showOptionsMenu) {
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        // Sound picker
+                                        Menu {
+                                            ForEach(alarmSounds, id: \.self) { sound in
+                                                Button(sound) {
+                                                    timer.selectedAlarmSound = sound
+                                                }
+                                            }
+                                        } label: {
+                                            HStack {
+                                                Text("Sound")
+                                                Spacer()
+                                                let displayName = timer.selectedAlarmSound
+                                                    .replacingOccurrences(of: " (Default)", with: "")
+                                                Text(displayName == "No Sound" ? "Mute" : displayName)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            .padding(.vertical, 6)
+                                        }
+
+                                        Divider()
+
+                                        // Duration picker
+                                        Menu {
+                                            ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
+                                                Button("\(seconds)s") {
+                                                    timer.alarmDuration = seconds
+                                                }
+                                            }
+                                        } label: {
+                                            HStack {
+                                                Text("Duration")
+                                                Spacer()
+                                                Text("\(timer.alarmDuration)s")
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                            .padding(.vertical, 6)
+                                        }
+
+                                        Divider()
+
+                                        // Loop toggle
+                                        Toggle("Loop", isOn: $timer.isLooping)
+                                            .padding(.vertical, 6)
+
+                                        Divider()
+
+                                        Toggle("Auto Color", isOn: $timer.useAutoColor)
+                                            .padding(.vertical, 6)
+
+                                        Divider()
+
+                                        Toggle("Auto Zoom", isOn: $timer.useAutoClockface)
+                                            .padding(.vertical, 6)
+
+                                        Divider()
+
+                                        Button(action: { copyTimerAsMarkdown(); showOptionsMenu = false }) {
+                                            HStack {
+                                                Text("Copy as Markdown")
+                                                Spacer()
+                                            }
+                                            .padding(.vertical, 6)
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                    .toggleStyle(.switch)
+                                    .font(.system(size: 13))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 6)
+                                    .frame(width: 220)
+                                }
+                            }
+
+                            // Add button
+                            if let onAdd = onAdd {
+                                Button(action: onAdd) {
+                                    Image(systemName: "plus")
+                                        .font(.system(size: size * 0.05, weight: .medium))
+                                        .foregroundStyle(.white)
+                                        .frame(width: size * 0.12, height: size * 0.12)
+                                        .background(Color(white: 0.2))
+                                        .clipShape(Circle())
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
 
-                        // Add button
-                        if let onAdd = onAdd {
-                            Button(action: onAdd) {
-                                Image(systemName: "plus")
-                                    .font(.system(size: size * 0.05, weight: .medium))
+                        // Watchface button (only when running/paused)
+                        if timer.timerState == .running || timer.timerState == .paused {
+                            Button(action: {
+                                if timer.useAutoClockface {
+                                    timer.useAutoClockface = false
+                                }
+                                cycleClockface()
+                            }) {
+                                Text(timer.effectiveClockface.label)
+                                    .font(.system(size: size * 0.04, weight: .medium))
                                     .foregroundStyle(.white)
                                     .frame(width: size * 0.12, height: size * 0.12)
                                     .background(Color(white: 0.2))
@@ -1293,7 +1299,6 @@ struct TimerCardView: View {
         .frame(width: size, height: size)
         .background(Color(white: 0.1))
         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-        .shimmer(active: timer.isInWarningZone)
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture {
