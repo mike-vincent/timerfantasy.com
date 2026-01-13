@@ -306,19 +306,9 @@ class TimerModel: ObservableObject, Identifiable {
         useAutoColor ? autoColor : timerColor
     }
 
-    // Urgency: red with increasing opacity as time runs out
-    // Based on original timer duration, not watchface
+    // Solid red for watchface
     var autoColor: Color {
-        guard initialSetSeconds > 0 else { return .red }
-        let percent = timeRemaining / initialSetSeconds
-
-        // Linear progression: ~50% opacity at halfway point
-        let progress = 1.0 - percent
-
-        // Opacity goes from 0.1 (full time) to 1.0 (no time)
-        let opacity = 0.1 + progress * 0.9
-
-        return Color.red.opacity(opacity)
+        .red
     }
 
     func start() {
