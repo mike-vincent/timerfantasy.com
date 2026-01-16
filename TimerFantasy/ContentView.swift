@@ -1064,16 +1064,34 @@ struct TimerCardView: View {
             // Top row: stop button left, label center - only when running/paused
             if timer.timerState == .running || timer.timerState == .paused {
                 VStack {
-                    HStack {
-                        Button(action: { showCancelConfirmation = true }) {
-                            Image(systemName: "xmark")
-                                .font(.system(size: size * 0.05, weight: .medium))
-                                .foregroundStyle(.white)
-                                .frame(width: size * 0.12, height: size * 0.12)
-                                .background(Color(white: 0.2))
-                                .clipShape(Circle())
+                    HStack(alignment: .top) {
+                        VStack(spacing: size * 0.02) {
+                            Button(action: { showCancelConfirmation = true }) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: size * 0.05, weight: .medium))
+                                    .foregroundStyle(.white)
+                                    .frame(width: size * 0.12, height: size * 0.12)
+                                    .background(Color(white: 0.2))
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+
+                            // Watchface button
+                            Button(action: {
+                                if timer.useAutoClockface {
+                                    timer.useAutoClockface = false
+                                }
+                                cycleClockface()
+                            }) {
+                                Text(timer.effectiveClockface.label)
+                                    .font(.system(size: size * 0.04, weight: .medium))
+                                    .foregroundStyle(.white)
+                                    .frame(width: size * 0.12, height: size * 0.12)
+                                    .background(Color(white: 0.2))
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
                         }
-                        .buttonStyle(.plain)
 
                         Spacer()
 
@@ -1103,37 +1121,48 @@ struct TimerCardView: View {
                 .padding(padding)
             }
 
-            // Bottom buttons - Delete left (idle), Play/Pause (hide when alarming)
+            // Top left: trash button when idle
+            if timer.timerState == .idle {
+                VStack {
+                    HStack {
+                        Button(action: { showDeleteConfirmation = true }) {
+                            Image(systemName: "trash")
+                                .font(.system(size: size * 0.05, weight: .medium))
+                                .foregroundStyle(onDelete == nil ? .gray : .white)
+                                .frame(width: size * 0.12, height: size * 0.12)
+                                .background(Color(white: 0.2))
+                                .clipShape(Circle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(onDelete == nil)
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(padding)
+            }
+
+            // Bottom buttons - Play/Pause (hide when alarming)
             if timer.timerState != .alarming {
                 VStack {
                     Spacer()
                     if timer.timerState == .idle {
-                        // Idle: Delete left, Play right
-                        HStack {
-                            Button(action: { showDeleteConfirmation = true }) {
-                                Image(systemName: "trash")
-                                    .font(.system(size: size * 0.05, weight: .medium))
-                                    .foregroundStyle(onDelete == nil ? .gray : .red)
-                                    .frame(width: size * 0.12, height: size * 0.12)
-                                    .background(Color(white: 0.2))
-                                    .clipShape(Circle())
-                            }
-                            .buttonStyle(.plain)
-                            .disabled(onDelete == nil)
-
-                            Spacer()
-
-                            Button(action: toggleTimer) {
+                        // Idle: Full width play button
+                        Button(action: toggleTimer) {
+                            HStack(spacing: size * 0.02) {
                                 Image(systemName: "play.fill")
                                     .font(.system(size: size * 0.05, weight: .medium))
-                                    .foregroundStyle(timer.totalSetSeconds == 0 ? .gray : rightButtonColor)
-                                    .frame(width: size * 0.12, height: size * 0.12)
-                                    .background(Color(white: 0.2))
-                                    .clipShape(Circle())
+                                Text("Play")
+                                    .font(.system(size: size * 0.04, weight: .medium))
                             }
-                            .buttonStyle(.plain)
-                            .disabled(timer.totalSetSeconds == 0)
+                            .foregroundStyle(timer.totalSetSeconds == 0 ? .gray : rightButtonColor)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: size * 0.12)
+                            .background(Color(white: 0.2))
+                            .clipShape(Capsule())
                         }
+                        .buttonStyle(.plain)
+                        .disabled(timer.totalSetSeconds == 0)
                     } else {
                         // Running/Paused: Full width pause/play button
                         Button(action: toggleTimer) {
@@ -1271,24 +1300,6 @@ struct TimerCardView: View {
                                 }
                                 .buttonStyle(.plain)
                             }
-                        }
-
-                        // Watchface button (only when running/paused)
-                        if timer.timerState == .running || timer.timerState == .paused {
-                            Button(action: {
-                                if timer.useAutoClockface {
-                                    timer.useAutoClockface = false
-                                }
-                                cycleClockface()
-                            }) {
-                                Text(timer.effectiveClockface.label)
-                                    .font(.system(size: size * 0.04, weight: .medium))
-                                    .foregroundStyle(.white)
-                                    .frame(width: size * 0.12, height: size * 0.12)
-                                    .background(Color(white: 0.2))
-                                    .clipShape(Circle())
-                            }
-                            .buttonStyle(.plain)
                         }
                     }
                 }
