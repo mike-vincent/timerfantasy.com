@@ -1152,10 +1152,10 @@ struct TimerCardView: View {
                             HStack(spacing: size * 0.02) {
                                 Image(systemName: "play.fill")
                                     .font(.system(size: size * 0.05, weight: .medium))
-                                Text("Play")
+                                Text("Start")
                                     .font(.system(size: size * 0.04, weight: .medium))
                             }
-                            .foregroundStyle(timer.totalSetSeconds == 0 ? .gray : rightButtonColor)
+                            .foregroundStyle(timer.totalSetSeconds == 0 ? .gray : .white)
                             .frame(maxWidth: .infinity)
                             .frame(height: size * 0.12)
                             .background(Color(white: 0.2))
@@ -1172,7 +1172,7 @@ struct TimerCardView: View {
                                 Text(timer.timerState == .running ? "Pause" : "Play")
                                     .font(.system(size: size * 0.04, weight: .medium))
                             }
-                            .foregroundStyle(rightButtonColor)
+                            .foregroundStyle(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: size * 0.12)
                             .background(Color(white: 0.2))
