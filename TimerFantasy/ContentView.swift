@@ -1121,7 +1121,7 @@ struct TimerCardView: View {
                 .padding(padding)
             }
 
-            // Top left: trash button when idle
+            // Top row: trash button left, label center when idle
             if timer.timerState == .idle {
                 VStack {
                     HStack {
@@ -1135,7 +1135,29 @@ struct TimerCardView: View {
                         }
                         .buttonStyle(.plain)
                         .disabled(onDelete == nil)
+
                         Spacer()
+
+                        // Timer label - center
+                        Text(timer.timerLabel.isEmpty ? "Timer" : timer.timerLabel)
+                            .font(.system(size: size * 0.06, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .lineLimit(1)
+                            .onTapGesture {
+                                isEditingLabel = true
+                            }
+                            .popover(isPresented: $isEditingLabel) {
+                                TextField("Timer", text: $timer.timerLabel)
+                                    .textFieldStyle(.roundedBorder)
+                                    .frame(width: 150)
+                                    .padding()
+                            }
+
+                        Spacer()
+
+                        // Placeholder to balance layout
+                        Color.clear
+                            .frame(width: size * 0.12, height: size * 0.12)
                     }
                     Spacer()
                 }
