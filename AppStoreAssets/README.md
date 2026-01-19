@@ -3,7 +3,7 @@
 ## Files in This Folder
 
 - `description.txt` - All App Store copy (description, keywords, subtitle, etc.)
-- `privacy-policy.html` - Host this somewhere and use the URL in App Store Connect
+- `privacy-policy.html` - Now live at https://mikevincent.dev/privacy/
 - `screenshots/` - Put your screenshots here
 
 ---
@@ -60,14 +60,15 @@ osascript -e 'tell application "Timer Fantasy" to set bounds of front window to 
 
 ## App Store Connect Checklist
 
-- [ ] App name: Timer Fantasy
-- [ ] Subtitle: Analog Timers for Your Mac
-- [ ] Description: (from description.txt)
-- [ ] Keywords: (from description.txt)
-- [ ] What's New: Initial release.
+- [x] App name: Timer Fantasy
+- [x] Subtitle: Analog Timers for Your Mac
+- [x] Description: (from description.txt)
+- [x] Keywords: (from description.txt)
+- [x] What's New: Initial release.
 - [ ] Screenshots: 1-10 at 2880x1800
-- [ ] Category: Productivity (or Utilities)
-- [ ] Privacy Policy URL: (host privacy-policy.html somewhere)
-- [ ] Support URL: your website or email link
-- [ ] Copyright: 2026 Mike Vincent
-- [ ] Age Rating: Complete the questionnaire (should be 4+)
+- [x] Category: Productivity
+- [x] Privacy Policy URL: https://mikevincent.dev/privacy/
+- [x] Support URL: https://mikevincent.dev
+- [x] Copyright: 2026 Mike Vincent
+- [ ] Age Rating: Complete the questionnaire (4+)
+- [ ] Archive and upload build from Xcode
