@@ -205,7 +205,7 @@ class TimerModel: ObservableObject, Identifiable {
     @Published var isAlarmRinging: Bool = false  // True while sound is playing
     @Published var isLooping: Bool = false  // Auto-restart when timer ends
     @Published var timerColor: Color = .orange  // Pie slice color (manual)
-    @Published var useAutoColor: Bool = true  // Auto rainbow color based on time remaining
+    @Published var useAutoColor: Bool = false  // false = orange (default), true = red
     @Published var useAutoClockface: Bool = true  // Auto-shrink watchface as time decreases
     // End At mode settings
     @Published var useEndAtMode: Bool = false
@@ -1218,109 +1218,107 @@ struct TimerCardView: View {
                 }
             }
 
-            // Top right buttons: menu, add, and watchface
+            // Top right buttons: add on top, menu underneath
             VStack {
                 HStack {
                     Spacer()
-                    VStack(alignment: .trailing, spacing: size * 0.02) {
-                        HStack(spacing: size * 0.02) {
-                            // Menu button (only when running/paused)
-                            if timer.timerState == .running || timer.timerState == .paused {
-                                Button(action: { showOptionsMenu = true }) {
-                                    Image(systemName: "ellipsis")
-                                        .font(.system(size: size * 0.05, weight: .medium))
-                                        .foregroundStyle(.white)
-                                        .frame(width: size * 0.12, height: size * 0.12)
-                                        .background(Color(white: 0.2))
-                                        .clipShape(Circle())
-                                }
-                                .buttonStyle(.plain)
-                                .popover(isPresented: $showOptionsMenu) {
-                                    VStack(alignment: .leading, spacing: 0) {
-                                        // Sound picker
-                                        Menu {
-                                            ForEach(alarmSounds, id: \.self) { sound in
-                                                Button(sound) {
-                                                    timer.selectedAlarmSound = sound
-                                                }
-                                            }
-                                        } label: {
-                                            HStack {
-                                                Text("Sound")
-                                                Spacer()
-                                                let displayName = timer.selectedAlarmSound
-                                                    .replacingOccurrences(of: " (Default)", with: "")
-                                                Text(displayName == "No Sound" ? "Mute" : displayName)
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                            .padding(.vertical, 6)
-                                        }
-
-                                        Divider()
-
-                                        // Duration picker
-                                        Menu {
-                                            ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
-                                                Button("\(seconds)s") {
-                                                    timer.alarmDuration = seconds
-                                                }
-                                            }
-                                        } label: {
-                                            HStack {
-                                                Text("Duration")
-                                                Spacer()
-                                                Text("\(timer.alarmDuration)s")
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                            .padding(.vertical, 6)
-                                        }
-
-                                        Divider()
-
-                                        // Loop toggle
-                                        Toggle("Loop", isOn: $timer.isLooping)
-                                            .padding(.vertical, 6)
-
-                                        Divider()
-
-                                        Toggle("Auto Color", isOn: $timer.useAutoColor)
-                                            .padding(.vertical, 6)
-
-                                        Divider()
-
-                                        Toggle("Auto Zoom", isOn: $timer.useAutoClockface)
-                                            .padding(.vertical, 6)
-
-                                        Divider()
-
-                                        Button(action: { copyTimerAsMarkdown(); showOptionsMenu = false }) {
-                                            HStack {
-                                                Text("Copy as Markdown")
-                                                Spacer()
-                                            }
-                                            .padding(.vertical, 6)
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                    .toggleStyle(.switch)
-                                    .font(.system(size: 13))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .frame(width: 220)
-                                }
+                    VStack(spacing: size * 0.02) {
+                        // Add button
+                        if let onAdd = onAdd {
+                            Button(action: onAdd) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: size * 0.05, weight: .medium))
+                                    .foregroundStyle(.white)
+                                    .frame(width: size * 0.12, height: size * 0.12)
+                                    .background(Color(white: 0.2))
+                                    .clipShape(Circle())
                             }
+                            .buttonStyle(.plain)
+                        }
 
-                            // Add button
-                            if let onAdd = onAdd {
-                                Button(action: onAdd) {
-                                    Image(systemName: "plus")
-                                        .font(.system(size: size * 0.05, weight: .medium))
-                                        .foregroundStyle(.white)
-                                        .frame(width: size * 0.12, height: size * 0.12)
-                                        .background(Color(white: 0.2))
-                                        .clipShape(Circle())
+                        // Menu button (only when running/paused)
+                        if timer.timerState == .running || timer.timerState == .paused {
+                            Button(action: { showOptionsMenu = true }) {
+                                Image(systemName: "ellipsis")
+                                    .font(.system(size: size * 0.05, weight: .medium))
+                                    .foregroundStyle(.white)
+                                    .frame(width: size * 0.12, height: size * 0.12)
+                                    .background(Color(white: 0.2))
+                                    .clipShape(Circle())
+                            }
+                            .buttonStyle(.plain)
+                            .popover(isPresented: $showOptionsMenu) {
+                                VStack(alignment: .leading, spacing: 0) {
+                                    // Sound picker
+                                    Menu {
+                                        ForEach(alarmSounds, id: \.self) { sound in
+                                            Button(sound) {
+                                                timer.selectedAlarmSound = sound
+                                            }
+                                        }
+                                    } label: {
+                                        HStack {
+                                            Text("Sound")
+                                            Spacer()
+                                            let displayName = timer.selectedAlarmSound
+                                                .replacingOccurrences(of: " (Default)", with: "")
+                                            Text(displayName == "No Sound" ? "Mute" : displayName)
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .padding(.vertical, 6)
+                                    }
+
+                                    Divider()
+
+                                    // Duration picker
+                                    Menu {
+                                        ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
+                                            Button("\(seconds)s") {
+                                                timer.alarmDuration = seconds
+                                            }
+                                        }
+                                    } label: {
+                                        HStack {
+                                            Text("Duration")
+                                            Spacer()
+                                            Text("\(timer.alarmDuration)s")
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .padding(.vertical, 6)
+                                    }
+
+                                    Divider()
+
+                                    // Loop toggle
+                                    Toggle("Loop", isOn: $timer.isLooping)
+                                        .padding(.vertical, 6)
+
+                                    Divider()
+
+                                    Toggle("Red", isOn: $timer.useAutoColor)
+                                        .padding(.vertical, 6)
+
+                                    Divider()
+
+                                    Toggle("Auto Zoom", isOn: $timer.useAutoClockface)
+                                        .padding(.vertical, 6)
+
+                                    Divider()
+
+                                    Button(action: { copyTimerAsMarkdown(); showOptionsMenu = false }) {
+                                        HStack {
+                                            Text("Copy as Markdown")
+                                            Spacer()
+                                        }
+                                        .padding(.vertical, 6)
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
+                                .toggleStyle(.switch)
+                                .font(.system(size: 13))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .frame(width: 220)
                             }
                         }
                     }
