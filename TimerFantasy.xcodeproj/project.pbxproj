@@ -11,6 +11,7 @@
 		A1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000012 /* ContentView.swift */; };
 		A1000004 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000014 /* Assets.xcassets */; };
 		A1000005 /* Preview Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1000015 /* Preview Assets.xcassets */; };
+		A1000032 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = A1000031 /* InfoPlist.strings */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -20,6 +21,7 @@
 		A1000014 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1000015 /* Preview Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Preview Assets.xcassets"; sourceTree = "<group>"; };
 		A1000016 /* TimerFantasy.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = TimerFantasy.entitlements; sourceTree = "<group>"; };
+		A1000030 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -56,6 +58,7 @@
 				A1000012 /* ContentView.swift */,
 				A1000014 /* Assets.xcassets */,
 				A1000016 /* TimerFantasy.entitlements */,
+				A1000031 /* InfoPlist.strings */,
 				A1000021 /* Preview Content */,
 			);
 			path = TimerFantasy;
@@ -129,6 +132,7 @@
 			files = (
 				A1000004 /* Assets.xcassets in Resources */,
 				A1000005 /* Preview Assets.xcassets in Resources */,
+				A1000032 /* InfoPlist.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -145,6 +149,17 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXVariantGroup section */
+		A1000031 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				A1000030 /* en */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
 
 /* Begin XCBuildConfiguration section */
 		A1000017 /* Debug */ = {

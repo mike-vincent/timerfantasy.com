@@ -432,6 +432,7 @@ struct ContentView: View {
     @State private var timers: [TimerModel] = []
     @State private var saveTimer: AnyCancellable?
     @State private var draggingTimer: TimerModel?
+    @State private var saveCounter: Int = 0
     @AppStorage("verticalAlignment") private var verticalAlignment: String = "middle"
     let globalTimer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
 
@@ -568,8 +569,12 @@ struct ContentView: View {
             for timer in timers {
                 timer.update()
             }
-            // Save periodically (every update cycle)
-            saveTimers()
+            // Save once per second (every 20 ticks at 0.05s interval)
+            saveCounter += 1
+            if saveCounter >= 20 {
+                saveCounter = 0
+                saveTimers()
+            }
         }
     }
 }
