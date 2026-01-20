@@ -554,25 +554,37 @@ struct ContentView: View {
             .padding(spacing)
         }
         .overlay(alignment: .topTrailing) {
-            Button(action: {
-                verticalAlignment = currentAlignment.next.rawValue
-            }) {
-                Image(systemName: currentAlignment.icon)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.6))
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(Color(white: 0.15)))
+            if timers.isEmpty {
+                Button(action: {
+                    timers.append(TimerModel())
+                    TimerStore.shared.save(timers)
+                }) {
+                    Image(systemName: "plus")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Color(white: 0.15)))
+                }
+                .buttonStyle(.plain)
+                .padding(8)
+            } else {
+                Button(action: {
+                    verticalAlignment = currentAlignment.next.rawValue
+                }) {
+                    Image(systemName: currentAlignment.icon)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.6))
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Color(white: 0.15)))
+                }
+                .buttonStyle(.plain)
+                .padding(8)
             }
-            .buttonStyle(.plain)
-            .padding(8)
         }
         .preferredColorScheme(.dark)
         .onAppear {
             // Load saved timers
             timers = TimerStore.shared.load()
-            if timers.isEmpty {
-                timers = [TimerModel()]
-            }
             setupWindow()
         }
         .onReceive(globalTimer) { _ in
@@ -838,8 +850,9 @@ struct TimerCardView: View {
 
     @ViewBuilder
     private func idleStateView(padding: CGFloat, digitFontSize: CGFloat) -> some View {
-        let toolbarHeight = size / 6  // Same as countdown/alarming for consistent top/bottom rows
-        let contentRowHeight = (size - toolbarHeight * 2) / 3  // 3 content rows in middle
+        let toolbarHeight = size / 6  // Same as countdown/alarming
+        let middleHeight = size - (toolbarHeight * 2)  // Middle section
+        let contentRowHeight = middleHeight / 3  // 3 content rows in middle
 
         // Row 1: Top row - trash, placeholder, label, gear, +
         HStack {
@@ -905,7 +918,7 @@ struct TimerCardView: View {
             }
         }
         .padding(.horizontal, padding)
-        .frame(maxWidth: .infinity)
+        .frame(width: size)
         .frame(height: toolbarHeight)
         .border(Color.red)
 
@@ -938,51 +951,54 @@ struct TimerCardView: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, padding)
-        .frame(maxWidth: .infinity)
+        .frame(width: size)
         .frame(height: contentRowHeight)
         .border(Color.green)
 
         // Row 3: Presets
         presetsRow(padding: padding, rowHeight: contentRowHeight)
-            .frame(maxWidth: .infinity)
+            .frame(width: size)
             .frame(height: contentRowHeight)
             .border(Color.blue)
 
         // Row 4: Time input
         if timer.useEndAtMode {
             endAtInputView(rowHeight: contentRowHeight)
-                .frame(maxWidth: .infinity)
+                .frame(width: size)
                 .frame(height: contentRowHeight)
                 .border(Color.cyan)
         } else {
             countdownInputView(rowHeight: contentRowHeight)
-                .frame(maxWidth: .infinity)
+                .frame(width: size)
                 .frame(height: contentRowHeight)
                 .border(Color.cyan)
         }
 
         // Row 5: Start button
         startButton(padding: padding, rowHeight: toolbarHeight)
-            .frame(maxWidth: .infinity)
+            .frame(width: size)
             .frame(height: toolbarHeight)
             .border(Color.purple)
     }
 
     @ViewBuilder
     private func presetsRow(padding: CGFloat, rowHeight: CGFloat) -> some View {
-        HStack(spacing: size * 0.015) {
+        let spacing = size * 0.015
+        let availableWidth = size - (padding * 2) - (spacing * 6)
+        let circleSize = min(availableWidth / 7, rowHeight * 0.65)
+
+        HStack(spacing: spacing) {
             ForEach(["5", "10", "15", "20", "30", "45", "60"], id: \.self) { preset in
-                compactPresetButton(preset: preset, rowHeight: rowHeight)
+                compactPresetButton(preset: preset, circleSize: circleSize)
             }
         }
         .padding(.horizontal, padding)
     }
 
     @ViewBuilder
-    private func compactPresetButton(preset: String, rowHeight: CGFloat) -> some View {
+    private func compactPresetButton(preset: String, circleSize: CGFloat) -> some View {
         let isSelected = selectedPreset == preset
         let minutes = Int(preset) ?? 0
-        let circleSize = rowHeight * 0.65
         Button(action: {
             timer.useEndAtMode = false
             selectedPreset = preset
@@ -1284,8 +1300,8 @@ struct TimerCardView: View {
     private func runningPausedStateView(clockSize: CGFloat) -> some View {
         let padding = size * 0.04
         let toolbarHeight = size / 6  // Fixed height for top/bottom rows
-        let clockRowHeight = size * 0.5  // Dedicated row for clock
-        let infoRowHeight = size - (toolbarHeight * 2) - clockRowHeight  // Remaining for countdown + info
+        let clockRowHeight = size * 0.5  // Dedicated row for clock - SAME as alarming
+        let infoRowHeight = size - (toolbarHeight * 2) - clockRowHeight  // Remaining for info
 
         // Row 1: Top bar - X, clockface, label, ellipsis, +
         HStack {
@@ -1360,28 +1376,32 @@ struct TimerCardView: View {
         .frame(height: toolbarHeight)
         .border(Color.red)
 
-        // Middle: Clock + countdown + alarm info
-        VStack(spacing: 0) {
-            AnalogTimerView(
-                remainingSeconds: timer.timeRemaining,
-                clockfaceSeconds: timer.effectiveClockface.seconds,
-                pieColor: timer.effectiveColor,
-                onSetTime: { seconds in
-                    timer.timeRemaining = max(1, seconds)
-                    timer.endTime = Date().addingTimeInterval(seconds)
-                }
-            )
-            .frame(width: middleHeight * 0.6, height: middleHeight * 0.6)
-            .onTapGesture {
-                if timer.useAutoClockface { timer.useAutoClockface = false }
-                cycleClockface()
+        // Row 2: Clock (own dedicated row - matches alarming bell position)
+        AnalogTimerView(
+            remainingSeconds: timer.timeRemaining,
+            clockfaceSeconds: timer.effectiveClockface.seconds,
+            pieColor: timer.effectiveColor,
+            onSetTime: { seconds in
+                timer.timeRemaining = max(1, seconds)
+                timer.endTime = Date().addingTimeInterval(seconds)
             }
+        )
+        .frame(width: clockRowHeight * 0.85, height: clockRowHeight * 0.85)
+        .onTapGesture {
+            if timer.useAutoClockface { timer.useAutoClockface = false }
+            cycleClockface()
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: clockRowHeight)
+        .border(Color.green)
 
+        // Row 3: Countdown + alarm info
+        VStack(spacing: 2) {
             HStack(spacing: size * 0.02) {
                 Text(formatDuration(timer.timeRemaining))
-                    .font(.system(size: size * 0.14, weight: .bold).monospacedDigit())
+                    .font(.system(size: infoRowHeight * 0.35, weight: .bold).monospacedDigit())
                 Text("left")
-                    .font(.system(size: size * 0.14, weight: .bold))
+                    .font(.system(size: infoRowHeight * 0.35, weight: .bold))
             }
             .foregroundStyle(.white)
 
@@ -1397,8 +1417,8 @@ struct TimerCardView: View {
                 .foregroundStyle(.white.opacity(0.5))
         }
         .frame(maxWidth: .infinity)
-        .frame(height: middleHeight)
-        .border(Color.green)
+        .frame(height: infoRowHeight)
+        .border(Color.yellow)
 
         // Bottom: Pause button
         Button(action: toggleTimer) {
