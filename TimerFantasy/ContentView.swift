@@ -818,13 +818,16 @@ struct TimerCardView: View {
                 if timer.timerState == .idle {
                     // Mode toggle
                     Button(action: { timer.useEndAtMode.toggle() }) {
-                        Text(timer.useEndAtMode ? "End At" : "Duration")
-                            .font(.system(size: size * 0.035, weight: .medium))
-                            .foregroundStyle(.white.opacity(0.8))
-                            .padding(.horizontal, size * 0.04)
-                            .padding(.vertical, size * 0.015)
-                            .background(Color(white: 0.2))
-                            .clipShape(Capsule())
+                        HStack(spacing: size * 0.015) {
+                            Image(systemName: timer.useEndAtMode ? "clock.fill" : "hourglass")
+                            Text(timer.useEndAtMode ? "End At" : "Duration")
+                        }
+                        .font(.system(size: size * 0.035, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.8))
+                        .padding(.horizontal, size * 0.04)
+                        .padding(.vertical, size * 0.015)
+                        .background(Color(white: 0.2))
+                        .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
 
@@ -910,11 +913,9 @@ struct TimerCardView: View {
                         }
                     }
 
-                    // Options - compact circles in row
+                    // Options row
                     HStack(spacing: size * 0.02) {
-                        let circleSize = size * 0.10
-
-                        // Sound picker
+                        // Sound picker - using same structure as Loop button
                         Menu {
                             ForEach(alarmSounds, id: \.self) { sound in
                                 Button(sound) {
@@ -928,46 +929,41 @@ struct TimerCardView: View {
                                 }
                             }
                         } label: {
-                            let displayName = timer.selectedAlarmSound
-                                .replacingOccurrences(of: " (Default)", with: "")
-                            Text(displayName == "No Sound" ? "Mute" : displayName)
-                                .font(.system(size: size * 0.035, weight: .medium))
-                                .foregroundStyle(.white.opacity(0.7))
-                                .padding(.horizontal, size * 0.025)
-                                .padding(.vertical, size * 0.015)
-                                .background(Capsule().fill(Color(white: 0.2)))
-                        }
-                        .menuStyle(.borderlessButton)
-                        .menuIndicator(.hidden)
-
-                        // Duration picker
-                        Menu {
-                            ForEach([1, 2, 3, 5, 10, 15, 30, 60], id: \.self) { seconds in
-                                Button("\(seconds)s") {
-                                    timer.alarmDuration = seconds
-                                }
+                            HStack(spacing: size * 0.015) {
+                                Image(systemName: "speaker.wave.2.fill")
+                                Text("Glass")
                             }
-                        } label: {
-                            ZStack {
-                                Circle().fill(Color(white: 0.2))
-                                    .frame(width: circleSize, height: circleSize)
-                                Text("\(timer.alarmDuration)s")
-                                    .font(.system(size: size * 0.04, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.7))
-                            }
+                            .font(.system(size: size * 0.035, weight: .medium))
+                            .foregroundStyle(.white.opacity(0.7))
+                            .padding(.horizontal, size * 0.025)
+                            .padding(.vertical, size * 0.015)
+                            .background(Capsule().fill(Color(white: 0.2)))
                         }
-                        .menuStyle(.borderlessButton)
-                        .menuIndicator(.hidden)
-                        .frame(width: circleSize, height: circleSize)
+                        .buttonStyle(.plain)
 
-                        // Loop toggle
                         Button(action: { timer.isLooping.toggle() }) {
-                            Text("Loop")
-                                .font(.system(size: size * 0.035, weight: .medium))
-                                .foregroundStyle(timer.isLooping ? .white : .white.opacity(0.7))
-                                .padding(.horizontal, size * 0.025)
-                                .padding(.vertical, size * 0.015)
-                                .background(Capsule().fill(timer.isLooping ? Color.red : Color(white: 0.2)))
+                            HStack(spacing: size * 0.015) {
+                                Image(systemName: "repeat")
+                                Text("Loop")
+                            }
+                            .font(.system(size: size * 0.035, weight: .medium))
+                            .foregroundStyle(timer.isLooping ? .white : .white.opacity(0.7))
+                            .padding(.horizontal, size * 0.025)
+                            .padding(.vertical, size * 0.015)
+                            .background(Capsule().fill(timer.isLooping ? Color.red : Color(white: 0.2)))
+                        }
+                        .buttonStyle(.plain)
+
+                        Button(action: { timer.isLooping.toggle() }) {
+                            HStack(spacing: size * 0.015) {
+                                Image(systemName: "repeat")
+                                Text("Loop")
+                            }
+                            .font(.system(size: size * 0.035, weight: .medium))
+                            .foregroundStyle(timer.isLooping ? .white : .white.opacity(0.7))
+                            .padding(.horizontal, size * 0.025)
+                            .padding(.vertical, size * 0.015)
+                            .background(Capsule().fill(timer.isLooping ? Color.red : Color(white: 0.2)))
                         }
                         .buttonStyle(.plain)
                     }
