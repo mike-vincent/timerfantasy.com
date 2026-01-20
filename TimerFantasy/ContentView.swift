@@ -1245,6 +1245,9 @@ struct TimerCardView: View {
 
         // Row 2: Bell circle (own dedicated row)
         AlarmingCircleView(size: clockRowHeight * 0.85, isRinging: timer.isAlarmRinging && timer.selectedAlarmSound != "No Sound")
+            .onTapGesture {
+                timer.dismissAlarm()
+            }
             .frame(maxWidth: .infinity)
             .frame(height: clockRowHeight)
             .border(Color.green)
@@ -1640,6 +1643,21 @@ struct TimerCardView: View {
             .padding(.horizontal, 12)
             .background(Color.white.opacity(0.05))
             .clipShape(RoundedRectangle(cornerRadius: 6))
+
+            // Copy as Markdown button
+            Button(action: { copyTimerAsMarkdown(); showOptionsMenu = false }) {
+                HStack(spacing: 10) {
+                    Image(systemName: "doc.on.doc")
+                        .frame(width: 20)
+                    Text("Copy as Markdown")
+                    Spacer()
+                }
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .background(Color.white.opacity(0.05))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+            }
+            .buttonStyle(.plain)
         }
         .font(.system(size: 13, weight: .medium))
         .foregroundStyle(.white)
