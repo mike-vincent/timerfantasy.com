@@ -245,18 +245,19 @@ class TimerModel: ObservableObject, Identifiable {
         }
     }
 
-    // Compact format for default timer name: "30s Timer", "2m35s Timer", "1h30m Timer"
+    // Compact format for default timer name: "55h32m Timer", "22m Timer", "33s Timer"
     var defaultTimerName: String {
         let total = Int(initialSetSeconds)
         let h = total / 3600
         let m = (total % 3600) / 60
         let s = total % 60
-        var parts: [String] = []
-        if h > 0 { parts.append("\(h)h") }
-        if m > 0 { parts.append("\(m)m") }
-        if s > 0 && h == 0 { parts.append("\(s)s") }  // Only show seconds if no hours
-        if parts.isEmpty { parts.append("0s") }
-        return parts.joined() + " Timer"
+        if h > 0 {
+            return "\(h)h\(m)m Timer"  // Hours + minutes
+        } else if m > 0 {
+            return "\(m)m Timer"  // Minutes only
+        } else {
+            return "\(s)s Timer"  // Seconds only
+        }
     }
 
     // Auto-select smallest watchface that fits remaining time
@@ -324,23 +325,26 @@ class TimerModel: ObservableObject, Identifiable {
     }
 
     func playAlarmSound() {
-        // Skip if No Sound selected
+        isAlarmRinging = true
+
+        // Skip sound if No Sound selected, but still throb for alarmDuration
         if selectedAlarmSound == "No Sound" {
-            isAlarmRinging = false
+            DispatchQueue.main.asyncAfter(deadline: .now() + Double(alarmDuration)) { [weak self] in
+                self?.isAlarmRinging = false
+            }
             return
         }
 
         // Extract sound name without "(Default)" suffix
         let soundName = selectedAlarmSound.replacingOccurrences(of: " (Default)", with: "")
-        isAlarmRinging = true
 
-        // Try to play from system sounds, loop for 5 seconds
+        // Try to play from system sounds, loop for alarmDuration seconds
         if let sound = NSSound(named: NSSound.Name(soundName)) {
             currentSound = sound
             sound.loops = true
             sound.play()
 
-            // Stop sound after alarmDuration seconds but keep showing bell
+            // Stop sound after alarmDuration seconds
             DispatchQueue.main.asyncAfter(deadline: .now() + Double(alarmDuration)) { [weak self] in
                 self?.currentSound?.stop()
                 self?.isAlarmRinging = false
@@ -364,17 +368,14 @@ class TimerModel: ObservableObject, Identifiable {
 
 // MARK: - Clockface Scale (top level)
 enum ClockfaceScale: String, CaseIterable {
-    case hours96, hours72, hours48, hours24, hours16, hours12, hours8, hours4, minutes120, minutes90, minutes60, minutes30, minutes15, minutes9, minutes5, seconds60
+    case hours96, hours48, hours16, hours12, hours4, minutes120, minutes90, minutes60, minutes30, minutes15, minutes9, minutes5, seconds60
 
     var seconds: Double {
         switch self {
         case .hours96: return 96 * 3600
-        case .hours72: return 72 * 3600
         case .hours48: return 48 * 3600
-        case .hours24: return 24 * 3600
         case .hours16: return 16 * 3600
         case .hours12: return 12 * 3600
-        case .hours8: return 8 * 3600
         case .hours4: return 4 * 3600
         case .minutes120: return 120 * 60
         case .minutes90: return 90 * 60
@@ -390,12 +391,9 @@ enum ClockfaceScale: String, CaseIterable {
     var label: String {
         switch self {
         case .hours96: return "96h"
-        case .hours72: return "72h"
         case .hours48: return "48h"
-        case .hours24: return "24h"
         case .hours16: return "16h"
         case .hours12: return "12h"
-        case .hours8: return "8h"
         case .hours4: return "4h"
         case .minutes120: return "120m"
         case .minutes90: return "90m"
@@ -516,12 +514,12 @@ struct ContentView: View {
                             let index = row * actualCols + col
                             if index < timers.count {
                                 let timer = timers[index]
-                                TimerCardView(timer: timer, compact: true, size: cardSize, onDelete: timers.count > 1 ? {
+                                TimerCardView(timer: timer, compact: true, size: cardSize, onDelete: {
                                     _ = withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                         timers.remove(at: index)
                                     }
                                     saveTimers()
-                                } : nil, onAdd: {
+                                }, onAdd: {
                                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                                         timers.append(TimerModel())
                                     }
@@ -552,33 +550,35 @@ struct ContentView: View {
             .frame(width: actualGridWidth, height: actualGridHeight)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: currentAlignment.frameAlignment)
             .padding(spacing)
-        }
-        .overlay(alignment: .topTrailing) {
-            if timers.isEmpty {
-                Button(action: {
-                    timers.append(TimerModel())
-                    TimerStore.shared.save(timers)
-                }) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.6))
-                        .frame(width: 28, height: 28)
-                        .background(Circle().fill(Color(white: 0.15)))
+            .overlay(alignment: .topTrailing) {
+                let overlayButtonSize = cardSize * 0.12
+                let overlayFontSize = cardSize * 0.05
+                if timers.isEmpty {
+                    Button(action: {
+                        timers.append(TimerModel())
+                        TimerStore.shared.save(timers)
+                    }) {
+                        Image(systemName: "plus")
+                            .font(.system(size: overlayFontSize, weight: .medium))
+                            .foregroundStyle(.white)
+                            .frame(width: overlayButtonSize, height: overlayButtonSize)
+                            .background(Circle().fill(Color(white: 0.2)))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(8)
+                } else {
+                    Button(action: {
+                        verticalAlignment = currentAlignment.next.rawValue
+                    }) {
+                        Image(systemName: currentAlignment.icon)
+                            .font(.system(size: overlayFontSize, weight: .medium))
+                            .foregroundStyle(.white)
+                            .frame(width: overlayButtonSize, height: overlayButtonSize)
+                            .background(Circle().fill(Color(white: 0.2)))
+                    }
+                    .buttonStyle(.plain)
+                    .padding(8)
                 }
-                .buttonStyle(.plain)
-                .padding(8)
-            } else {
-                Button(action: {
-                    verticalAlignment = currentAlignment.next.rawValue
-                }) {
-                    Image(systemName: currentAlignment.icon)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.white.opacity(0.6))
-                        .frame(width: 28, height: 28)
-                        .background(Circle().fill(Color(white: 0.15)))
-                }
-                .buttonStyle(.plain)
-                .padding(8)
             }
         }
         .preferredColorScheme(.dark)
@@ -667,6 +667,9 @@ struct TimerCardView: View {
     var onAdd: (() -> Void)? = nil
     var onSave: (() -> Void)? = nil
 
+    // Debug flag to show row borders
+    private let showDebugBorders = false
+
     private var scale: CGFloat { size / 200 }  // Base size is 200
 
     let alarmSounds = [
@@ -686,7 +689,7 @@ struct TimerCardView: View {
             let nextIndex = (currentIndex + 1) % available.count
             timer.selectedClockface = available[nextIndex]
         } else {
-            timer.selectedClockface = available.last ?? .hours24
+            timer.selectedClockface = available.last ?? .hours12
         }
     }
 
@@ -699,6 +702,21 @@ struct TimerCardView: View {
     @State private var selectedEndTime = Date()
     @State private var isEditingLabel = false
     @State private var selectedPreset: String? = nil
+    @State private var blinkOn: Bool = true
+    @State private var currentTime: Date = Date()
+    @State private var idleMode: IdleMode = .countdown
+    @State private var clockDisplayMode: ClockDisplayMode = .digital
+
+    enum IdleMode {
+        case endAt
+        case clock
+        case countdown
+    }
+
+    enum ClockDisplayMode {
+        case digital
+        case analog
+    }
 
     enum TimeField: Hashable {
         case hours, minutes, seconds, label
@@ -727,6 +745,11 @@ struct TimerCardView: View {
         case .paused: timer.resume()
         case .alarming: timer.dismissAlarm()
         }
+    }
+
+    private func dismissAlarmToClock() {
+        idleMode = .clock
+        timer.dismissAlarm()
     }
 
     func formatDuration(_ duration: TimeInterval) -> String {
@@ -852,7 +875,9 @@ struct TimerCardView: View {
     private func idleStateView(padding: CGFloat, digitFontSize: CGFloat) -> some View {
         let toolbarHeight = size / 6  // Same as countdown/alarming
         let middleHeight = size - (toolbarHeight * 2)  // Middle section
-        let contentRowHeight = middleHeight / 3  // 3 content rows in middle
+        let shortRowHeight = middleHeight * 0.25  // Rows 2 & 4: toggle and presets
+        let inputRowHeight = middleHeight * 0.5  // Row 3: time input / clock
+        let labelMaxWidth = size - (padding * 2) - (size * 0.12 * 4)
 
         // Row 1: Top row - trash, placeholder, label, gear, +
         HStack {
@@ -872,10 +897,14 @@ struct TimerCardView: View {
 
             Spacer()
 
-            Text(timer.timerLabel.isEmpty ? "Timer" : timer.timerLabel)
+            Text(timer.timerLabel.isEmpty || timer.timerLabel == "Timer" ? "Timer" : timer.timerLabel)
                 .font(.system(size: size * 0.06, weight: .medium))
                 .foregroundStyle(.white.opacity(0.7))
-                .lineLimit(1)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+                .allowsTightening(true)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: labelMaxWidth)
                 .onTapGesture {
                     isEditingLabel = true
                 }
@@ -890,7 +919,7 @@ struct TimerCardView: View {
 
             // Settings menu for sound/loop options
             Button(action: { showOptionsMenu = true }) {
-                Image(systemName: "gearshape")
+                Image(systemName: "gearshape.fill")
                     .font(.system(size: size * 0.05, weight: .medium))
                     .foregroundStyle(.white)
                     .frame(width: size * 0.12, height: size * 0.12)
@@ -920,128 +949,224 @@ struct TimerCardView: View {
         .padding(.horizontal, padding)
         .frame(width: size)
         .frame(height: toolbarHeight)
-        .border(Color.red)
+        .border(showDebugBorders ? Color.red : Color.clear)
 
         // Row 2: End At | Countdown toggle (two equal-width capsules)
+        // Calculate capsule height to match preset circle size
+        let presetSpacing = size * 0.015
+        let presetAvailableWidth = size - (padding * 2) - (presetSpacing * 6)
+        let capsuleHeight = min(presetAvailableWidth / 7, shortRowHeight * 0.65)
+
         HStack(spacing: size * 0.02) {
-            Button(action: { timer.useEndAtMode = true }) {
+            Button(action: {
+                idleMode = .endAt
+                timer.useEndAtMode = true
+            }) {
                 HStack(spacing: size * 0.015) {
-                    Image(systemName: "clock")
                     Text("End At")
                 }
-                .font(.system(size: contentRowHeight * 0.28, weight: .medium))
-                .foregroundStyle(timer.useEndAtMode ? .black : .white.opacity(0.7))
+                .font(.system(size: capsuleHeight * 0.45, weight: .medium))
+                .foregroundStyle(idleMode == .endAt ? .black : .white.opacity(0.7))
                 .frame(maxWidth: .infinity)
-                .frame(height: contentRowHeight * 0.65)
-                .background(Capsule().fill(timer.useEndAtMode ? Color.white : Color(white: 0.2)))
+                .frame(height: capsuleHeight)
+                .background(Capsule().fill(idleMode == .endAt ? Color.white : Color(white: 0.2)))
             }
             .buttonStyle(.plain)
 
-            Button(action: { timer.useEndAtMode = false }) {
+            Button(action: {
+                if idleMode == .clock {
+                    clockDisplayMode = (clockDisplayMode == .digital) ? .analog : .digital
+                } else {
+                    idleMode = .clock
+                }
+            }) {
                 HStack(spacing: size * 0.015) {
-                    Image(systemName: "hourglass")
+                    Text("Clock")
+                }
+                .font(.system(size: capsuleHeight * 0.45, weight: .medium))
+                .foregroundStyle(idleMode == .clock ? .black : .white.opacity(0.7))
+                .frame(maxWidth: .infinity)
+                .frame(height: capsuleHeight)
+                .background(Capsule().fill(idleMode == .clock ? Color.white : Color(white: 0.2)))
+            }
+            .buttonStyle(.plain)
+
+            Button(action: {
+                idleMode = .countdown
+                timer.useEndAtMode = false
+            }) {
+                HStack(spacing: size * 0.015) {
                     Text("Countdown")
                 }
-                .font(.system(size: contentRowHeight * 0.28, weight: .medium))
-                .foregroundStyle(!timer.useEndAtMode ? .black : .white.opacity(0.7))
+                .font(.system(size: capsuleHeight * 0.45, weight: .medium))
+                .foregroundStyle(idleMode == .countdown ? .black : .white.opacity(0.7))
                 .frame(maxWidth: .infinity)
-                .frame(height: contentRowHeight * 0.65)
-                .background(Capsule().fill(!timer.useEndAtMode ? Color.white : Color(white: 0.2)))
+                .frame(height: capsuleHeight)
+                .background(Capsule().fill(idleMode == .countdown ? Color.white : Color(white: 0.2)))
             }
             .buttonStyle(.plain)
         }
         .padding(.horizontal, padding)
         .frame(width: size)
-        .frame(height: contentRowHeight)
-        .border(Color.green)
+        .frame(height: shortRowHeight)
+        .border(showDebugBorders ? Color.green : Color.clear)
 
-        // Row 3: Presets
-        presetsRow(padding: padding, rowHeight: contentRowHeight)
-            .frame(width: size)
-            .frame(height: contentRowHeight)
-            .border(Color.blue)
-
-        // Row 4: Time input
-        if timer.useEndAtMode {
-            endAtInputView(rowHeight: contentRowHeight)
-                .frame(width: size)
-                .frame(height: contentRowHeight)
-                .border(Color.cyan)
+        // Row 3: Time input / clock (taller, vertically centered)
+        if idleMode == .clock {
+            if clockDisplayMode == .digital {
+                CurrentTimeSlotsView(date: currentTime, cardSize: size)
+                    .frame(width: size, height: inputRowHeight, alignment: .center)
+                    .border(showDebugBorders ? Color.gray : Color.clear)
+            } else {
+                CurrentTimeClockFaceView(date: currentTime)
+                    .frame(width: inputRowHeight * 0.95, height: inputRowHeight * 0.95)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .border(showDebugBorders ? Color.gray : Color.clear)
+            }
+        } else if idleMode == .endAt {
+            endAtInputView(rowHeight: inputRowHeight)
+                .frame(width: size, height: inputRowHeight, alignment: .center)
+                .border(showDebugBorders ? Color.cyan : Color.clear)
         } else {
-            countdownInputView(rowHeight: contentRowHeight)
-                .frame(width: size)
-                .frame(height: contentRowHeight)
-                .border(Color.cyan)
+            countdownInputView(rowHeight: inputRowHeight)
+                .frame(width: size, height: inputRowHeight, alignment: .center)
+                .border(showDebugBorders ? Color.cyan : Color.clear)
         }
+
+        // Row 4: Presets
+        presetsRow(padding: padding, rowHeight: shortRowHeight)
+            .frame(width: size)
+            .frame(height: shortRowHeight)
+            .border(showDebugBorders ? Color.blue : Color.clear)
 
         // Row 5: Start button
         startButton(padding: padding, rowHeight: toolbarHeight)
             .frame(width: size)
             .frame(height: toolbarHeight)
-            .border(Color.purple)
+            .border(showDebugBorders ? Color.purple : Color.clear)
     }
 
     @ViewBuilder
     private func presetsRow(padding: CGFloat, rowHeight: CGFloat) -> some View {
-        let spacing = size * 0.015
-        let availableWidth = size - (padding * 2) - (spacing * 6)
-        let circleSize = min(availableWidth / 7, rowHeight * 0.65)
+        let segmentedPresets = ["5", "10", "15", "20", "30", "45", "60"]
+        let availableWidth = size - (padding * 2)
+        let separatorWidth: CGFloat = 1
+        let segmentWidth = (availableWidth - (separatorWidth * CGFloat(segmentedPresets.count - 1))) / CGFloat(segmentedPresets.count)
 
-        HStack(spacing: spacing) {
-            ForEach(["5", "10", "15", "20", "30", "45", "60"], id: \.self) { preset in
-                compactPresetButton(preset: preset, circleSize: circleSize)
-            }
-        }
-        .padding(.horizontal, padding)
+        segmentedPresetControl(presets: segmentedPresets, rowHeight: rowHeight, segmentWidth: segmentWidth)
+            .frame(width: availableWidth)
+            .padding(.horizontal, padding)
     }
 
     @ViewBuilder
-    private func compactPresetButton(preset: String, circleSize: CGFloat) -> some View {
+    private func segmentedPresetControl(presets: [String], rowHeight: CGFloat, segmentWidth: CGFloat) -> some View {
+        let segmentHeight = rowHeight * 0.7
+        let fontSize = segmentHeight * 0.35
+        let cornerRadius = segmentHeight / 2
+
+        ZStack {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(Color(white: 0.2))
+
+            HStack(spacing: 0) {
+                ForEach(Array(presets.enumerated()), id: \.offset) { index, preset in
+                    let isSelected = selectedPreset == preset
+                    Button(action: { applyPreset(preset) }) {
+                        ZStack {
+                            if isSelected {
+                                Color.white
+                            } else {
+                                Color.clear
+                            }
+                            Text("\(preset)m")
+                                .font(.system(size: fontSize, weight: .medium))
+                                .minimumScaleFactor(0.5)
+                                .lineLimit(1)
+                                .foregroundStyle(isSelected ? .black : .white.opacity(0.7))
+                        }
+                        .frame(width: segmentWidth, height: segmentHeight)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+
+                    if index != presets.count - 1 {
+                        Rectangle()
+                            .fill(Color.white.opacity(0.2))
+                            .frame(width: 1, height: segmentHeight * 0.7)
+                    }
+                }
+            }
+        }
+        .frame(width: (segmentWidth * CGFloat(presets.count)) + CGFloat(presets.count - 1), height: segmentHeight)
+        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func compactPresetButton(preset: String, rowHeight: CGFloat, capsuleWidth: CGFloat) -> some View {
         let isSelected = selectedPreset == preset
+        let capsuleHeight = rowHeight * 0.7
+        let fontSize = capsuleHeight * 0.35
+        Button(action: { applyPreset(preset) }) {
+            Text("\(preset)m")
+                .font(.system(size: fontSize, weight: .medium))
+                .minimumScaleFactor(0.5)
+                .lineLimit(1)
+                .foregroundStyle(isSelected ? .black : .white.opacity(0.7))
+                .frame(width: capsuleWidth, height: capsuleHeight)
+                .background(Capsule().fill(isSelected ? Color.white : Color(white: 0.2)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func applyPreset(_ preset: String) {
+        selectedPreset = preset
         let minutes = Int(preset) ?? 0
-        Button(action: {
-            timer.useEndAtMode = false
-            selectedPreset = preset
+        if idleMode == .endAt {
+            // Set end time to current time + preset minutes
+            let endDate = Date().addingTimeInterval(TimeInterval(minutes * 60))
+            let calendar = Calendar.current
+            var hour = calendar.component(.hour, from: endDate)
+            let minute = calendar.component(.minute, from: endDate)
+            let isPM = hour >= 12
+            if hour > 12 { hour -= 12 }
+            if hour == 0 { hour = 12 }
+            timer.endAtHour = hour
+            timer.endAtMinute = minute
+            timer.endAtIsPM = isPM
+        } else {
+            // Set countdown duration
             timer.selectedHours = minutes / 60
             timer.selectedMinutes = minutes % 60
             timer.selectedSeconds = 0
-        }) {
-            Text(preset)
-                .font(.system(size: circleSize * 0.4, weight: .medium))
-                .foregroundStyle(isSelected ? .black : .white.opacity(0.7))
-                .frame(width: circleSize, height: circleSize)
-                .background(Circle().fill(isSelected ? Color.white : Color(white: 0.2)))
         }
-        .buttonStyle(.plain)
     }
 
 
     @ViewBuilder
     private func endAtInputView(rowHeight: CGFloat) -> some View {
-        let fieldSize = rowHeight * 1.2
-        let fontSize = rowHeight * 0.8
-        let colonWidth = rowHeight * 0.18
+        // Use smaller fields so HH:MM + AM/PM fits (same font size as countdown)
+        let availableWidth = size * 0.9
+        let colonWidth = size * 0.04
+        // Fit 3 fields + 2 colons worth of space (same as countdown), but we use 3 fields + 1 colon
+        let fieldSize = (availableWidth - (colonWidth * 2)) / 3
         HStack(spacing: 0) {
             TimeDigitField(value: $timer.endAtHour, maxValue: 12, isFocused: focusedField == .hours, size: fieldSize, onSubmit: { timer.start() })
                 .focused($focusedField, equals: .hours)
             Text(":")
-                .font(.system(size: fontSize, weight: .bold).monospacedDigit())
+                .font(.system(size: fieldSize * 0.65, weight: .bold).monospacedDigit())
                 .foregroundStyle(.white)
                 .frame(width: colonWidth)
             TimeDigitField(value: $timer.endAtMinute, maxValue: 59, isFocused: focusedField == .minutes, size: fieldSize, onSubmit: { timer.start() })
                 .focused($focusedField, equals: .minutes)
-            Text(":")
-                .font(.system(size: fontSize, weight: .bold).monospacedDigit())
-                .foregroundStyle(Color(white: 0.1))
-                .frame(width: colonWidth)
             Button(action: { timer.endAtIsPM.toggle() }) {
                 Text(timer.endAtIsPM ? "PM" : "AM")
                     .font(.system(size: fieldSize * 0.72, weight: .bold))
                     .foregroundStyle(.white)
-                    .fixedSize()
+                    .frame(width: fieldSize + colonWidth, height: fieldSize * 0.9)  // Extra colon width for AM/PM
             }
             .buttonStyle(.plain)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: timer.endAtHour) { _, _ in updateEndAtDuration() }
         .onChange(of: timer.endAtMinute) { _, _ in updateEndAtDuration() }
         .onChange(of: timer.endAtIsPM) { _, _ in updateEndAtDuration() }
@@ -1049,9 +1174,10 @@ struct TimerCardView: View {
 
     @ViewBuilder
     private func countdownInputView(rowHeight: CGFloat) -> some View {
-        let fieldSize = rowHeight * 1.2
-        let fontSize = rowHeight * 0.8
-        let colonWidth = rowHeight * 0.18
+        let availableWidth = size * 0.9  // Account for padding
+        let colonWidth = size * 0.04
+        let fieldSize = (availableWidth - (colonWidth * 2)) / 3  // 3 fields, 2 colons
+        let fontSize = fieldSize * 0.65
         HStack(spacing: 0) {
             TimeDigitField(value: $timer.selectedHours, maxValue: 168, isFocused: focusedField == .hours, size: fieldSize, onSubmit: { timer.start() })
                 .focused($focusedField, equals: .hours)
@@ -1068,6 +1194,7 @@ struct TimerCardView: View {
             TimeDigitField(value: $timer.selectedSeconds, maxValue: 99, isFocused: focusedField == .seconds, size: fieldSize, onSubmit: { timer.start() })
                 .focused($focusedField, equals: .seconds)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onChange(of: timer.selectedHours) { _, _ in if focusedField != nil { selectedPreset = nil } }
         .onChange(of: timer.selectedMinutes) { _, _ in if focusedField != nil { selectedPreset = nil } }
         .onChange(of: timer.selectedSeconds) { _, _ in if focusedField != nil { selectedPreset = nil } }
@@ -1177,7 +1304,7 @@ struct TimerCardView: View {
             HStack(spacing: size * 0.02) {
                 Image(systemName: "play.fill")
                     .font(.system(size: rowHeight * 0.4, weight: .medium))
-                Text("Start")
+                Text("Start Timer")
                     .font(.system(size: rowHeight * 0.35, weight: .medium))
             }
             .foregroundStyle(timer.totalSetSeconds == 0 ? .gray : .white)
@@ -1191,6 +1318,12 @@ struct TimerCardView: View {
         .padding(.horizontal, padding)
     }
 
+    private var currentTimeString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm a"
+        return "It's \(formatter.string(from: currentTime))."
+    }
+
     @ViewBuilder
     private func alarmingStateView(padding: CGFloat) -> some View {
         let toolbarHeight = size / 6  // Fixed height for top/bottom rows
@@ -1199,8 +1332,8 @@ struct TimerCardView: View {
 
         // Row 1: Toolbar - X, placeholder, label, placeholder, +
         HStack {
-            Button(action: { timer.dismissAlarm() }) {
-                Image(systemName: "xmark")
+            Button(action: { dismissAlarmToClock() }) {
+                Image(systemName: "arrowshape.backward.fill")
                     .font(.system(size: size * 0.05, weight: .medium))
                     .foregroundStyle(.white)
                     .frame(width: size * 0.12, height: size * 0.12)
@@ -1214,10 +1347,12 @@ struct TimerCardView: View {
 
             Spacer()
 
-            Text(timer.timerLabel.isEmpty ? "Timer" : timer.timerLabel)
+            Text(timer.timerLabel.isEmpty || timer.timerLabel == "Timer" ? timer.defaultTimerName : timer.timerLabel)
                 .font(.system(size: size * 0.06, weight: .medium))
                 .foregroundStyle(.white.opacity(0.7))
-                .lineLimit(1)
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: size * 0.4)
 
             Spacer()
 
@@ -1241,32 +1376,48 @@ struct TimerCardView: View {
         .padding(.horizontal, padding)
         .frame(maxWidth: .infinity)
         .frame(height: toolbarHeight)
-        .border(Color.red)
+        .border(showDebugBorders ? Color.red : Color.clear)
 
         // Row 2: Bell circle (own dedicated row)
-        AlarmingCircleView(size: clockRowHeight * 0.85, isRinging: timer.isAlarmRinging && timer.selectedAlarmSound != "No Sound")
+        AlarmingCircleView(size: clockRowHeight * 0.95, isRinging: timer.isAlarmRinging)
             .onTapGesture {
-                timer.dismissAlarm()
+                dismissAlarmToClock()
             }
             .frame(maxWidth: .infinity)
             .frame(height: clockRowHeight)
-            .border(Color.green)
+            .border(showDebugBorders ? Color.green : Color.clear)
 
         // Row 3: Alarm info text
         VStack(spacing: 2) {
-            Text("Alarm started at \(getStartTimeString()).")
-                .font(.system(size: toolbarHeight * 0.22, weight: .regular))
+            // Blinking "00:00:00 left" matching countdown view (VCR style blink - only digits blink)
+            HStack(spacing: 0) {
+                Text("00")
+                Text(":")
+                Text("00")
+                Text(":")
+                Text("00")
+                Text(" left")
+            }
+            .opacity(timer.isAlarmRinging ? (blinkOn ? 1 : 0) : 1)
+            .font(.system(size: infoRowHeight * 0.35, weight: .bold).monospacedDigit())
+            .foregroundStyle(.white)
+            .onReceive(Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()) { _ in
+                if timer.isAlarmRinging {
+                    blinkOn.toggle()
+                } else {
+                    blinkOn = true
+                }
+            }
+
+            Text("\(formatDurationWords(timer.initialSetSeconds)) timer · \(getStartTimeString()) to \(getEndTimeString())")
+                .font(.system(size: toolbarHeight * 0.18, weight: .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
-            Text("Your \(formatDurationWords(timer.initialSetSeconds)) alarm ended at \(getEndTimeString()).")
-                .font(.system(size: toolbarHeight * 0.22, weight: .semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
+                .foregroundStyle(.white.opacity(0.5))
         }
-        .foregroundStyle(.white.opacity(0.5))
         .frame(maxWidth: .infinity)
         .frame(height: infoRowHeight)
-        .border(Color.yellow)
+        .border(showDebugBorders ? Color.yellow : Color.clear)
 
         // Bottom: Repeat button
         Button(action: {
@@ -1283,7 +1434,7 @@ struct TimerCardView: View {
             HStack(spacing: size * 0.02) {
                 Image(systemName: "repeat")
                     .font(.system(size: toolbarHeight * 0.4, weight: .medium))
-                Text("Repeat")
+                Text("Repeat Timer")
                     .font(.system(size: toolbarHeight * 0.35, weight: .medium))
             }
             .foregroundStyle(.white)
@@ -1296,20 +1447,21 @@ struct TimerCardView: View {
         .padding(.horizontal, padding)
         .frame(maxWidth: .infinity)
         .frame(height: toolbarHeight)
-        .border(Color.purple)
+        .border(showDebugBorders ? Color.purple : Color.clear)
     }
 
     @ViewBuilder
     private func runningPausedStateView(clockSize: CGFloat) -> some View {
-        let padding = size * 0.04
+        let padding = size * 0.025
         let toolbarHeight = size / 6  // Fixed height for top/bottom rows
         let clockRowHeight = size * 0.5  // Dedicated row for clock - SAME as alarming
         let infoRowHeight = size - (toolbarHeight * 2) - clockRowHeight  // Remaining for info
+        let labelMaxWidth = size - (padding * 2) - (size * 0.12 * 4)
 
-        // Row 1: Top bar - X, clockface, label, ellipsis, +
+        // Row 1: Top bar - X, placeholder, label, gear, +
         HStack {
             Button(action: { showCancelConfirmation = true }) {
-                Image(systemName: "xmark")
+                Image(systemName: "arrowshape.backward.fill")
                     .font(.system(size: size * 0.05, weight: .medium))
                     .foregroundStyle(.white)
                     .frame(width: size * 0.12, height: size * 0.12)
@@ -1318,25 +1470,19 @@ struct TimerCardView: View {
             }
             .buttonStyle(.plain)
 
-            Button(action: {
-                if timer.useAutoClockface { timer.useAutoClockface = false }
-                cycleClockface()
-            }) {
-                Text(timer.effectiveClockface.label)
-                    .font(.system(size: size * 0.04, weight: .medium))
-                    .foregroundStyle(.white)
-                    .frame(width: size * 0.12, height: size * 0.12)
-                    .background(Color(white: 0.2))
-                    .clipShape(Circle())
-            }
-            .buttonStyle(.plain)
+            // Placeholder to balance right side (gear + plus)
+            Color.clear.frame(width: size * 0.12, height: size * 0.12)
 
             Spacer()
 
-            Text(timer.timerLabel.isEmpty ? timer.defaultTimerName : timer.timerLabel)
+            Text(timer.timerLabel.isEmpty || timer.timerLabel == "Timer" ? timer.defaultTimerName : timer.timerLabel)
                 .font(.system(size: size * 0.06, weight: .medium))
                 .foregroundStyle(.white.opacity(0.7))
-                .lineLimit(1)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+                .allowsTightening(true)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: labelMaxWidth)
                 .onTapGesture { isEditingLabel = true }
                 .popover(isPresented: $isEditingLabel) {
                     TextField("Timer", text: $timer.timerLabel)
@@ -1348,7 +1494,7 @@ struct TimerCardView: View {
             Spacer()
 
             Button(action: { showOptionsMenu = true }) {
-                Image(systemName: "gearshape")
+                Image(systemName: "gearshape.fill")
                     .font(.system(size: size * 0.05, weight: .medium))
                     .foregroundStyle(.white)
                     .frame(width: size * 0.12, height: size * 0.12)
@@ -1377,30 +1523,43 @@ struct TimerCardView: View {
         .padding(.horizontal, padding)
         .frame(maxWidth: .infinity)
         .frame(height: toolbarHeight)
-        .border(Color.red)
+        .opacity(0.75)
+        .border(showDebugBorders ? Color.red : Color.clear)
 
         // Row 2: Clock (own dedicated row - matches alarming bell position)
-        AnalogTimerView(
-            remainingSeconds: timer.timeRemaining,
-            clockfaceSeconds: timer.effectiveClockface.seconds,
-            pieColor: timer.effectiveColor,
-            onSetTime: { seconds in
-                timer.timeRemaining = max(1, seconds)
-                timer.endTime = Date().addingTimeInterval(seconds)
+        ZStack {
+            AnalogTimerView(
+                remainingSeconds: timer.timeRemaining,
+                clockfaceSeconds: timer.effectiveClockface.seconds,
+                pieColor: timer.effectiveColor,
+                onSetTime: { seconds in
+                    timer.timeRemaining = max(1, seconds)
+                    timer.endTime = Date().addingTimeInterval(seconds)
+                }
+            )
+            .frame(width: clockRowHeight * 0.95, height: clockRowHeight * 0.95)
+
+            // Clockface badge under center dot
+            Button(action: {
+                if timer.useAutoClockface { timer.useAutoClockface = false }
+                cycleClockface()
+            }) {
+                Text("\(timer.effectiveClockface.label) clockface")
+                    .font(.system(size: size * 0.025, weight: .medium))
+                    .foregroundStyle(.black.opacity(0.6))
             }
-        )
-        .frame(width: clockRowHeight * 0.85, height: clockRowHeight * 0.85)
-        .onTapGesture {
-            if timer.useAutoClockface { timer.useAutoClockface = false }
-            cycleClockface()
+            .buttonStyle(.plain)
+            .offset(y: size * 0.03)
         }
         .frame(maxWidth: .infinity)
         .frame(height: clockRowHeight)
-        .border(Color.green)
+        .border(showDebugBorders ? Color.green : Color.clear)
 
         // Row 3: Countdown + alarm info
         VStack(spacing: 2) {
             HStack(spacing: size * 0.02) {
+                Image(systemName: "bell.fill")
+                    .font(.system(size: infoRowHeight * 0.3, weight: .heavy))
                 Text(formatDuration(timer.timeRemaining))
                     .font(.system(size: infoRowHeight * 0.35, weight: .bold).monospacedDigit())
                 Text("left")
@@ -1408,27 +1567,22 @@ struct TimerCardView: View {
             }
             .foregroundStyle(.white)
 
-            Text("Alarm started at \(getStartTimeString()).")
-                .font(.system(size: toolbarHeight * 0.22, weight: .regular))
-                .lineLimit(1)
-                .minimumScaleFactor(0.5)
-                .foregroundStyle(.white.opacity(0.5))
-            Text("Your \(formatDurationWords(timer.initialSetSeconds)) alarm ends at \(getEndTimeString()).")
-                .font(.system(size: toolbarHeight * 0.22, weight: .semibold))
+            Text("\(formatDurationWords(timer.initialSetSeconds)) timer · \(getStartTimeString()) to \(getEndTimeString())")
+                .font(.system(size: toolbarHeight * 0.18, weight: .semibold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.5)
                 .foregroundStyle(.white.opacity(0.5))
         }
         .frame(maxWidth: .infinity)
         .frame(height: infoRowHeight)
-        .border(Color.yellow)
+        .border(showDebugBorders ? Color.yellow : Color.clear)
 
         // Bottom: Pause button
         Button(action: toggleTimer) {
             HStack(spacing: size * 0.02) {
                 Image(systemName: timer.timerState == .running ? "pause.fill" : "play.fill")
                     .font(.system(size: toolbarHeight * 0.4, weight: .medium))
-                Text(timer.timerState == .running ? "Pause" : "Resume")
+                Text(timer.timerState == .running ? "Pause Timer" : "Resume Timer")
                     .font(.system(size: toolbarHeight * 0.35, weight: .medium))
             }
             .foregroundStyle(.white)
@@ -1439,14 +1593,22 @@ struct TimerCardView: View {
         }
         .buttonStyle(.plain)
         .padding(.horizontal, padding)
+        .opacity(0.75)
         .frame(maxWidth: .infinity)
         .frame(height: toolbarHeight)
-        .border(Color.purple)
+        .border(showDebugBorders ? Color.purple : Color.clear)
     }
 
     @ViewBuilder
     private var optionsMenuContent: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let rowCornerRadius: CGFloat = 8
+        let rowBackground = Color.white.opacity(0.06)
+        let rowBorder = Color.white.opacity(0.05)
+        let menuCornerRadius: CGFloat = 12
+        let menuBackground = Color(white: 0.12)
+        let menuBorder = Color.white.opacity(0.08)
+
+        VStack(alignment: .leading, spacing: 6) {
             // Sound picker
             Menu {
                 ForEach(alarmSounds, id: \.self) { sound in
@@ -1467,11 +1629,21 @@ struct TimerCardView: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.3))
                 }
-                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 9)
                 .padding(.horizontal, 12)
-                .background(Color.white.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .background(
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .fill(rowBackground)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .stroke(rowBorder, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
             }
+            .menuStyle(.borderlessButton)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             // Length picker
             Menu {
@@ -1492,11 +1664,21 @@ struct TimerCardView: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.3))
                 }
-                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 9)
                 .padding(.horizontal, 12)
-                .background(Color.white.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .background(
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .fill(rowBackground)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .stroke(rowBorder, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
             }
+            .menuStyle(.borderlessButton)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             // Loop toggle
             HStack(spacing: 10) {
@@ -1509,10 +1691,16 @@ struct TimerCardView: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 9)
             .padding(.horizontal, 12)
-            .background(Color.white.opacity(0.05))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .background(
+                RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                    .fill(rowBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                    .stroke(rowBorder, lineWidth: 1)
+            )
 
             // Red toggle
             HStack(spacing: 10) {
@@ -1525,10 +1713,16 @@ struct TimerCardView: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 9)
             .padding(.horizontal, 12)
-            .background(Color.white.opacity(0.05))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .background(
+                RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                    .fill(rowBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                    .stroke(rowBorder, lineWidth: 1)
+            )
 
             // Auto Zoom toggle
             HStack(spacing: 10) {
@@ -1541,10 +1735,16 @@ struct TimerCardView: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 9)
             .padding(.horizontal, 12)
-            .background(Color.white.opacity(0.05))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .background(
+                RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                    .fill(rowBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                    .stroke(rowBorder, lineWidth: 1)
+            )
 
             // Copy as Markdown button
             Button(action: { copyTimerAsMarkdown(); showOptionsMenu = false }) {
@@ -1554,23 +1754,44 @@ struct TimerCardView: View {
                     Text("Copy as Markdown")
                     Spacer()
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, 9)
                 .padding(.horizontal, 12)
-                .background(Color.white.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .background(
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .fill(rowBackground)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .stroke(rowBorder, lineWidth: 1)
+                )
             }
             .buttonStyle(.plain)
         }
         .font(.system(size: 13, weight: .medium))
         .foregroundStyle(.white)
-        .padding(8)
-        .frame(width: 220)
-        .background(Color(white: 0.15))
+        .padding(10)
+        .frame(width: 230)
+        .background(
+            RoundedRectangle(cornerRadius: menuCornerRadius, style: .continuous)
+                .fill(menuBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: menuCornerRadius, style: .continuous)
+                .stroke(menuBorder, lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.35), radius: 12, x: 0, y: 6)
     }
 
     @ViewBuilder
     private var idleOptionsMenuContent: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let rowCornerRadius: CGFloat = 8
+        let rowBackground = Color.white.opacity(0.06)
+        let rowBorder = Color.white.opacity(0.05)
+        let menuCornerRadius: CGFloat = 12
+        let menuBackground = Color(white: 0.12)
+        let menuBorder = Color.white.opacity(0.08)
+
+        VStack(spacing: 6) {
             // Sound picker
             Menu {
                 ForEach(alarmSounds, id: \.self) { sound in
@@ -1597,11 +1818,21 @@ struct TimerCardView: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.3))
                 }
-                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 9)
                 .padding(.horizontal, 12)
-                .background(Color.white.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .background(
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .fill(rowBackground)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .stroke(rowBorder, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
             }
+            .menuStyle(.borderlessButton)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             // Length picker
             Menu {
@@ -1622,11 +1853,21 @@ struct TimerCardView: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundStyle(.white.opacity(0.3))
                 }
-                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 9)
                 .padding(.horizontal, 12)
-                .background(Color.white.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .background(
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .fill(rowBackground)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .stroke(rowBorder, lineWidth: 1)
+                )
+                .contentShape(Rectangle())
             }
+            .menuStyle(.borderlessButton)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             // Loop toggle
             HStack(spacing: 10) {
@@ -1639,10 +1880,16 @@ struct TimerCardView: View {
                     .toggleStyle(.switch)
                     .controlSize(.small)
             }
-            .padding(.vertical, 8)
+            .padding(.vertical, 9)
             .padding(.horizontal, 12)
-            .background(Color.white.opacity(0.05))
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            .background(
+                RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                    .fill(rowBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                    .stroke(rowBorder, lineWidth: 1)
+            )
 
             // Copy as Markdown button
             Button(action: { copyTimerAsMarkdown(); showOptionsMenu = false }) {
@@ -1652,25 +1899,39 @@ struct TimerCardView: View {
                     Text("Copy as Markdown")
                     Spacer()
                 }
-                .padding(.vertical, 8)
+                .padding(.vertical, 9)
                 .padding(.horizontal, 12)
-                .background(Color.white.opacity(0.05))
-                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .background(
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .fill(rowBackground)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: rowCornerRadius, style: .continuous)
+                        .stroke(rowBorder, lineWidth: 1)
+                )
             }
             .buttonStyle(.plain)
         }
         .font(.system(size: 13, weight: .medium))
         .foregroundStyle(.white)
-        .padding(8)
-        .frame(width: 220)
-        .background(Color(white: 0.15))
+        .padding(10)
+        .frame(width: 230)
+        .background(
+            RoundedRectangle(cornerRadius: menuCornerRadius, style: .continuous)
+                .fill(menuBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: menuCornerRadius, style: .continuous)
+                .stroke(menuBorder, lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.35), radius: 12, x: 0, y: 6)
     }
 
     var body: some View {
         let clockSize = size * 0.4
         let digitFontSize = size * 0.16
         let cornerRadius = size * 0.06
-        let padding = size * 0.04
+        let padding = size * 0.025
 
         VStack(spacing: 0) {
             if timer.timerState == .idle {
@@ -1702,15 +1963,178 @@ struct TimerCardView: View {
             }
             Button("Keep Running", role: .cancel) {}
         }
+        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { now in
+            currentTime = now
+        }
         .onAppear {
             // Clear focus to prevent visible field highlight
             focusedField = nil
+            idleMode = timer.useEndAtMode ? .endAt : .countdown
+            clockDisplayMode = .digital
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 NSApp.keyWindow?.makeFirstResponder(nil)
             }
         }
     }
 
+}
+
+// MARK: - Current Time Slots View (read-only clock)
+struct CurrentTimeSlotsView: View {
+    let date: Date
+    let cardSize: CGFloat
+
+    private var blinkOn: Bool {
+        let phase = Int(date.timeIntervalSinceReferenceDate / 3.0) % 2
+        return phase == 0
+    }
+
+    private var timeParts: (hour: Int, minute: Int, isPM: Bool) {
+        let calendar = Calendar.current
+        let hour24 = calendar.component(.hour, from: date)
+        let minute = calendar.component(.minute, from: date)
+        let isPM = hour24 >= 12
+        var hour12 = hour24 % 12
+        if hour12 == 0 { hour12 = 12 }
+        return (hour12, minute, isPM)
+    }
+
+    var body: some View {
+        let availableWidth = cardSize * 0.9
+        let colonWidth = cardSize * 0.04
+        let fieldSize = (availableWidth - (colonWidth * 2)) / 3
+        let fontSize = fieldSize * 0.65
+
+        HStack(spacing: 0) {
+            TimeDigitDisplay(value: timeParts.hour, size: fieldSize)
+            Text(":")
+                .font(.system(size: fontSize, weight: .bold).monospacedDigit())
+                .foregroundStyle(.white)
+                .frame(width: colonWidth)
+                .opacity(blinkOn ? 1 : 0.2)
+            TimeDigitDisplay(value: timeParts.minute, size: fieldSize)
+            Text(timeParts.isPM ? "PM" : "AM")
+                .font(.system(size: fieldSize * 0.72, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: fieldSize + colonWidth, height: fieldSize * 0.9)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Current Time Analog Clock View (read-only)
+struct CurrentTimeClockFaceView: View {
+    let date: Date
+
+    private var hourAngle: Double {
+        let calendar = Calendar.current
+        let hour = calendar.component(.hour, from: date) % 12
+        let minute = calendar.component(.minute, from: date)
+        let second = calendar.component(.second, from: date)
+        let fraction = (Double(hour) + Double(minute) / 60 + Double(second) / 3600) / 12
+        return fraction * 360
+    }
+
+    private var minuteAngle: Double {
+        let calendar = Calendar.current
+        let minute = calendar.component(.minute, from: date)
+        let second = calendar.component(.second, from: date)
+        let fraction = (Double(minute) + Double(second) / 60) / 60
+        return fraction * 360
+    }
+
+    private var secondAngle: Double {
+        let calendar = Calendar.current
+        let second = calendar.component(.second, from: date)
+        return (Double(second) / 60) * 360
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let size = min(geometry.size.width, geometry.size.height)
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(0.9))
+                    .frame(width: size * 0.9, height: size * 0.9)
+
+                ForEach(1...12, id: \.self) { value in
+                    let angle = Double(value) / 12.0 * 360.0 - 90.0
+                    let radius = size * 0.32
+                    let x = radius * cos(angle * .pi / 180)
+                    let y = radius * sin(angle * .pi / 180)
+                    Text("\(value)")
+                        .font(.system(size: size * 0.09, weight: .heavy))
+                        .foregroundColor(.black)
+                        .position(x: size / 2 + x, y: size / 2 + y)
+                }
+
+                ForEach(0..<12, id: \.self) { index in
+                    let angle = Double(index) * 30.0
+                    Rectangle()
+                        .fill(Color.black.opacity(index % 3 == 0 ? 0.8 : 0.6))
+                        .frame(width: size * 0.015, height: index % 3 == 0 ? size * 0.08 : size * 0.05)
+                        .offset(y: -(size * 0.38))
+                        .rotationEffect(.degrees(angle))
+                }
+
+                Rectangle()
+                    .fill(Color.black.opacity(0.85))
+                    .frame(width: size * 0.03, height: size * 0.22)
+                    .offset(y: -(size * 0.11))
+                    .rotationEffect(.degrees(hourAngle))
+
+                Rectangle()
+                    .fill(Color.black.opacity(0.85))
+                    .frame(width: size * 0.02, height: size * 0.32)
+                    .offset(y: -(size * 0.16))
+                    .rotationEffect(.degrees(minuteAngle))
+
+                Rectangle()
+                    .fill(Color.black.opacity(0.7))
+                    .frame(width: size * 0.01, height: size * 0.36)
+                    .offset(y: -(size * 0.18))
+                    .rotationEffect(.degrees(secondAngle))
+
+                Circle()
+                    .fill(Color.black)
+                    .frame(width: size * 0.05, height: size * 0.05)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
+    }
+}
+
+struct ConeHandShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        let size = min(rect.width, rect.height)
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let length = size * 0.35
+        let baseWidth = size * 0.06
+
+        var path = Path()
+        path.move(to: CGPoint(x: center.x, y: center.y - length))
+        path.addLine(to: CGPoint(x: center.x - baseWidth / 2, y: center.y + baseWidth * 0.15))
+        path.addLine(to: CGPoint(x: center.x + baseWidth / 2, y: center.y + baseWidth * 0.15))
+        path.closeSubpath()
+        return path
+    }
+}
+
+struct TimeDigitDisplay: View {
+    let value: Int
+    var size: CGFloat = 110
+
+    var body: some View {
+        let fieldWidth: CGFloat = size
+        let fieldHeight: CGFloat = size * 0.9
+        let fontSize: CGFloat = size * 0.72
+
+        Text(String(format: "%02d", value))
+            .font(.system(size: fontSize, weight: .bold).monospacedDigit())
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .frame(width: fieldWidth, height: fieldHeight)
+    }
 }
 
 // MARK: - Time Digit Field (clickable number input)
@@ -2190,8 +2614,8 @@ struct AlarmingCircleView: View {
                 .frame(width: size * 0.9, height: size * 0.9)
                 .scaleEffect(scale)
 
-            Image(systemName: "bell")
-                .font(.system(size: size * 0.4, weight: .light))
+            Image(systemName: "bell.fill")
+                .font(.system(size: size * 0.55, weight: .light))
                 .foregroundStyle(.white)
         }
         .frame(width: size, height: size)
@@ -2204,7 +2628,7 @@ struct AlarmingCircleView: View {
             if newValue {
                 startPulsing()
             } else {
-                scale = 1.0
+                stopPulsing()
             }
         }
     }
@@ -2212,6 +2636,12 @@ struct AlarmingCircleView: View {
     private func startPulsing() {
         withAnimation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true)) {
             scale = 1.15
+        }
+    }
+
+    private func stopPulsing() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            scale = 1.0
         }
     }
 }
@@ -2223,7 +2653,7 @@ struct ThrobbingBellView: View {
     @State private var scale: CGFloat = 1.0
 
     var body: some View {
-        Image(systemName: "bell")
+        Image(systemName: "bell.fill")
             .font(.system(size: size, weight: .light))
             .foregroundStyle(.white)
             .scaleEffect(scale)
