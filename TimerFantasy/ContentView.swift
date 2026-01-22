@@ -1422,11 +1422,8 @@ struct TimerCardView: View {
         // Bottom: Repeat button
         Button(action: {
             timer.dismissAlarm()
-            if timer.useEndAtMode {
-                updateEndAtDuration()
-                timer.initialSetSeconds = timer.totalSetSeconds
-            }
-            timer.timeRemaining = timer.useEndAtMode ? timer.totalSetSeconds : timer.initialSetSeconds
+            // Always repeat the original duration, even for End At timers.
+            timer.timeRemaining = timer.initialSetSeconds
             timer.startTime = Date()
             timer.endTime = Date().addingTimeInterval(timer.timeRemaining)
             timer.timerState = .running
