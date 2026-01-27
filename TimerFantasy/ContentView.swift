@@ -2,6 +2,11 @@ import SwiftUI
 import Combine
 import AppKit
 
+// MARK: - Notifications
+extension Notification.Name {
+    static let timersDidChange = Notification.Name("timersDidChange")
+}
+
 // MARK: - Persistable Timer Data
 struct TimerData: Codable, Identifiable {
     let id: UUID
@@ -281,6 +286,10 @@ class TimerModel: ObservableObject, Identifiable {
     }
 
     func start() {
+        // Recalculate End At duration at start time (in case time passed since user set it)
+        if useEndAtMode {
+            recalculateEndAtDuration()
+        }
         guard totalSetSeconds > 0 else { return }
         initialSetSeconds = totalSetSeconds
         timeRemaining = totalSetSeconds
@@ -288,6 +297,38 @@ class TimerModel: ObservableObject, Identifiable {
         endTime = Date().addingTimeInterval(totalSetSeconds)
         timerState = .running
         selectedClockface = ClockfaceScale.allCases.last { $0.seconds >= totalSetSeconds } ?? .hours96
+    }
+
+    func recalculateEndAtDuration() {
+        // Convert 12-hour to 24-hour
+        var hour24 = endAtHour
+        if endAtHour == 12 {
+            hour24 = endAtIsPM ? 12 : 0
+        } else {
+            hour24 = endAtIsPM ? endAtHour + 12 : endAtHour
+        }
+
+        // Create target date
+        let calendar = Calendar.current
+        var components = calendar.dateComponents([.year, .month, .day], from: Date())
+        components.hour = hour24
+        components.minute = endAtMinute
+        components.second = 0
+
+        guard var targetDate = calendar.date(from: components) else { return }
+
+        // If target is in the past, assume tomorrow
+        if targetDate <= Date() {
+            targetDate = calendar.date(byAdding: .day, value: 1, to: targetDate) ?? targetDate
+        }
+
+        let duration = targetDate.timeIntervalSinceNow
+        if duration > 0 {
+            let total = Int(duration)
+            selectedHours = total / 3600
+            selectedMinutes = (total % 3600) / 60
+            selectedSeconds = total % 60
+        }
     }
 
     func pause() { timerState = .paused }
@@ -459,6 +500,7 @@ struct ContentView: View {
 
     private func saveTimers() {
         TimerStore.shared.save(timers)
+        NotificationCenter.default.post(name: .timersDidChange, object: nil)
     }
 
     private func bestGridLayout(itemCount: Int, windowRatio: Double) -> (cols: Int, rows: Int) {
@@ -556,7 +598,7 @@ struct ContentView: View {
                 if timers.isEmpty {
                     Button(action: {
                         timers.append(TimerModel())
-                        TimerStore.shared.save(timers)
+                        saveTimers()
                     }) {
                         Image(systemName: "plus")
                             .font(.system(size: overlayFontSize, weight: .medium))
@@ -586,6 +628,10 @@ struct ContentView: View {
             // Load saved timers
             timers = TimerStore.shared.load()
             setupWindow()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .timersDidChange)) { _ in
+            // Reload timers when changed externally (e.g., via Siri)
+            timers = TimerStore.shared.load()
         }
         .onReceive(globalTimer) { _ in
             for timer in timers {
@@ -838,35 +884,7 @@ struct TimerCardView: View {
     }
 
     func updateEndAtDuration() {
-        // Convert 12-hour to 24-hour
-        var hour24 = timer.endAtHour
-        if timer.endAtHour == 12 {
-            hour24 = timer.endAtIsPM ? 12 : 0
-        } else {
-            hour24 = timer.endAtIsPM ? timer.endAtHour + 12 : timer.endAtHour
-        }
-
-        // Create target date
-        let calendar = Calendar.current
-        var components = calendar.dateComponents([.year, .month, .day], from: Date())
-        components.hour = hour24
-        components.minute = timer.endAtMinute
-        components.second = 0
-
-        guard var targetDate = calendar.date(from: components) else { return }
-
-        // If target is in the past, assume tomorrow
-        if targetDate <= Date() {
-            targetDate = calendar.date(byAdding: .day, value: 1, to: targetDate) ?? targetDate
-        }
-
-        let duration = targetDate.timeIntervalSinceNow
-        if duration > 0 {
-            let total = Int(duration)
-            timer.selectedHours = total / 3600
-            timer.selectedMinutes = (total % 3600) / 60
-            timer.selectedSeconds = total % 60
-        }
+        timer.recalculateEndAtDuration()
     }
 
     // MARK: - Extracted View Builders
