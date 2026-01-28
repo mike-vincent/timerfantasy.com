@@ -4,6 +4,7 @@
 <head>
     <meta http-equiv="content-type" content="text/html; charset=utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#1a1a1a" />
     <link rel="shortcut icon" href="/favicon.ico" />
     <link rel="icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/icon.png" />
@@ -33,10 +34,40 @@
             margin: 0 0.5em;
             opacity: 0.5;
         }
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: #FF9500;
+            color: #000;
+            padding: 8px 16px;
+            z-index: 100;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .skip-link:focus {
+            top: 0;
+        }
+        a:focus, button:focus {
+            outline: 2px solid #FF9500;
+            outline-offset: 2px;
+        }
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
     </style>
 </head>
 
 <body id="overview" class="theme-dark">
+    <a href="#main" class="skip-link">Skip to main content</a>
 
     <main id="main" class="main" role="main">
         <article>
@@ -44,7 +75,7 @@
                 <div class="section-content">
                     <div class="row">
                         <header class="column large-centered large-10 small-12 text-center">
-                            <figure class="icon-hero center"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M17 13H12V8" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M5 3.5L7 2" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19 3.5L17 2" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12 22C16.9706 22 21 17.9706 21 13C21 8.02944 16.9706 4 12 4C7.02944 4 3 8.02944 3 13C3 17.9706 7.02944 22 12 22Z" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg></figure>
+                            <figure class="icon-hero center" role="img" aria-label="Timer Fantasy app icon"><svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"><path d="M17 13H12V8" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M5 3.5L7 2" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M19 3.5L17 2" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path><path d="M12 22C16.9706 22 21 17.9706 21 13C21 8.02944 16.9706 4 12 4C7.02944 4 3 8.02944 3 13C3 17.9706 7.02944 22 12 22Z" stroke="#ffffff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"></path></svg></figure>
 
                             <h1 class="typography-hero-headline">Timer Fantasy</h1>
                             <p class="typography-intro">Beautiful analog timers for your Mac. Set timers with a simple drag on an elegant clock face, track countdowns from your menu bar, and watch time count down in a way that is intuitive and satisfying.</p>
@@ -53,12 +84,11 @@
                 </div>
             </section>
 
-                <a href="#getting-started">&nbsp;</a>
-                <section class="section section-getting-started" id="getting-started">
+                <section class="section section-getting-started" id="getting-started" aria-labelledby="getting-started-heading">
                     <div class="section-content">
                         <div class="row">
                             <div class="column large-centered large-10 small-12">
-<h2 class="typography-subsection-headline">Getting started</h2>
+<h2 id="getting-started-heading" class="typography-subsection-headline">Getting started</h2>
 <p>To use Timer Fantasy, download it from the Mac App Store and launch it on your Mac. The app will open with a single timer ready to use. You can create additional timers by clicking the + button.</p>
 <p>To set a timer, drag on the clock face to select your desired duration. The timer will show the time counting down as you drag. Release to confirm the duration, then click the Start button to begin the countdown.</p>
 <p>Note: Timer Fantasy requires macOS 14 Sonoma or later. If you have iCloud enabled, your timers will automatically sync across all your Macs signed into the same iCloud account.</p>
@@ -79,12 +109,11 @@
                         </div>
                     </div>
                 </section>
-                <a href="#setting-timers">&nbsp;</a>
-                <section class="section section-setting-timers" id="setting-timers">
+                <section class="section section-setting-timers" id="setting-timers" aria-labelledby="setting-timers-heading">
                     <div class="section-content">
                         <div class="row">
                             <div class="column large-centered large-10 small-12">
-<h2 class="typography-subsection-headline">Setting timers</h2>
+<h2 id="setting-timers-heading" class="typography-subsection-headline">Setting timers</h2>
 <p>Timer Fantasy offers multiple ways to set your timer duration. The primary method is dragging on the analog clock face, which provides a natural and intuitive way to select time. As you drag, the timer display updates in real-time to show your selected duration.</p>
 <p>For quick access to common durations, use the preset buttons below the clock face. These buttons let you instantly set timers for frequently used times like 5 minutes, 15 minutes, 30 minutes, or 1 hour.</p>
 <p>Note: The clock face scale automatically adjusts based on your selected duration. A 5-minute timer will display on a 5-minute scale for maximum precision, while a 2-hour timer will display on a 2-hour scale.</p>
@@ -102,12 +131,11 @@
                         </div>
                     </div>
                 </section>
-                <a href="#clock-faces">&nbsp;</a>
-                <section class="section section-clock-faces" id="clock-faces">
+                <section class="section section-clock-faces" id="clock-faces" aria-labelledby="clock-faces-heading">
                     <div class="section-content">
                         <div class="row">
                             <div class="column large-centered large-10 small-12">
-<h2 class="typography-subsection-headline">Clock face scales</h2>
+<h2 id="clock-faces-heading" class="typography-subsection-headline">Clock face scales</h2>
 <p>Timer Fantasy includes 13 different clock face scales, ranging from 60 seconds to 96 hours. Each scale is designed to show time in a way that makes sense for that duration. A 5-minute timer shows individual minutes clearly. A 24-hour timer shows hours.</p>
 <p>The app automatically selects the most appropriate clock face based on your timer duration. You can also manually switch between clock faces by tapping the scale indicator button.</p>
 <h3 class="typography-tout">Available scales</h3>
@@ -125,12 +153,11 @@
                         </div>
                     </div>
                 </section>
-                <a href="#multiple-timers">&nbsp;</a>
-                <section class="section section-multiple-timers" id="multiple-timers">
+                <section class="section section-multiple-timers" id="multiple-timers" aria-labelledby="multiple-timers-heading">
                     <div class="section-content">
                         <div class="row">
                             <div class="column large-centered large-10 small-12">
-<h2 class="typography-subsection-headline">Multiple timers</h2>
+<h2 id="multiple-timers-heading" class="typography-subsection-headline">Multiple timers</h2>
 <p>Timer Fantasy supports unlimited simultaneous timers. Each timer runs independently with its own settings, colors, labels, and alarm sounds. This makes the app perfect for complex scenarios like cooking multiple dishes, managing workout intervals, or tracking multiple deadlines.</p>
 <p>Timers are displayed in a responsive grid that automatically adjusts to fit your window size. Resize the window to see more or fewer timers at once.</p>
 <h3 class="typography-label">Creating timers</h3>
@@ -155,12 +182,11 @@
                         </div>
                     </div>
                 </section>
-                <a href="#customization">&nbsp;</a>
-                <section class="section section-customization" id="customization">
+                <section class="section section-customization" id="customization" aria-labelledby="customization-heading">
                     <div class="section-content">
                         <div class="row">
                             <div class="column large-centered large-10 small-12">
-<h2 class="typography-subsection-headline">Customization</h2>
+<h2 id="customization-heading" class="typography-subsection-headline">Customization</h2>
 <p>Timer Fantasy offers extensive customization options to make your timers work exactly how you want them. Each timer can have its own individual settings for alarm sounds, colors, looping, and labels.</p>
 <p>Access customization options by clicking the settings button (⋯) on any timer.</p>
 <h3 class="typography-tout">Alarm sounds</h3>
@@ -190,12 +216,11 @@
                         </div>
                     </div>
                 </section>
-                <a href="#icloud-sync">&nbsp;</a>
-                <section class="section section-icloud-sync" id="icloud-sync">
+                <section class="section section-icloud-sync" id="icloud-sync" aria-labelledby="icloud-sync-heading">
                     <div class="section-content">
                         <div class="row">
                             <div class="column large-centered large-10 small-12">
-<h2 class="typography-subsection-headline">iCloud sync</h2>
+<h2 id="icloud-sync-heading" class="typography-subsection-headline">iCloud sync</h2>
 <p>Timer Fantasy automatically syncs your timers across all your Macs using iCloud. Create a timer on your MacBook, and it appears on your iMac. Change the settings on any timer and the changes sync everywhere.</p>
 <p>Note: iCloud sync requires you to be signed into the same iCloud account on all devices. Sync happens automatically in the background. There is nothing you need to configure.</p>
 <h3 class="typography-tout">What syncs</h3>
@@ -216,12 +241,11 @@
                         </div>
                     </div>
                 </section>
-                <a href="#menu-bar">&nbsp;</a>
-                <section class="section section-menu-bar" id="menu-bar">
+                <section class="section section-menu-bar" id="menu-bar" aria-labelledby="menu-bar-heading">
                     <div class="section-content">
                         <div class="row">
                             <div class="column large-centered large-10 small-12">
-<h2 class="typography-subsection-headline">Menu bar</h2>
+<h2 id="menu-bar-heading" class="typography-subsection-headline">Menu bar</h2>
 <p>Timer Fantasy lives in your menu bar, showing your active countdown at a glance. See time remaining without switching apps or taking up screen space.</p>
 <p>The menu bar icon changes based on timer state: a timer icon when running, a pause icon when paused, and a bell when the alarm is ringing.</p>
 <h3 class="typography-tout">Menu bar controls</h3>
@@ -235,12 +259,11 @@
                         </div>
                     </div>
                 </section>
-                <a href="#siri-shortcuts">&nbsp;</a>
-                <section class="section section-siri-shortcuts" id="siri-shortcuts">
+                <section class="section section-siri-shortcuts" id="siri-shortcuts" aria-labelledby="siri-shortcuts-heading">
                     <div class="section-content">
                         <div class="row">
                             <div class="column large-centered large-10 small-12">
-<h2 class="typography-subsection-headline">Siri Shortcuts</h2>
+<h2 id="siri-shortcuts-heading" class="typography-subsection-headline">Siri Shortcuts</h2>
 <p>Start timers with your voice using Siri. Say "Start a 10 minute timer in Timer Fantasy" and get back to what you are doing. You can also specify a custom name for the timer.</p>
 <p>Timer Fantasy integrates with the Shortcuts app, so you can include timer actions in your own automations and workflows.</p>
 <h3 class="typography-tout">Example commands</h3>
@@ -252,15 +275,14 @@
                         </div>
                     </div>
                 </section>
-                <a href="#privacy-data">&nbsp;</a>
-                <section class="section section-privacy-data" id="privacy-data">
+                <section class="section section-privacy-data" id="privacy-data" aria-labelledby="privacy-data-heading">
                     <div class="section-content">
                         <div class="row">
                             <div class="column large-centered large-10 small-12">
-<h2 class="typography-subsection-headline">Your Privacy and Data</h2>
+<h2 id="privacy-data-heading" class="typography-subsection-headline">Your Privacy and Data</h2>
 <p>Timer Fantasy is designed with privacy as a core principle. The app does not collect, store, or transmit any personal information. There are no analytics, no tracking, no advertising, and no third-party SDKs.</p>
 <p>Your timer data is stored locally on your device. If you use iCloud sync, your data is stored in your personal iCloud account using Apple CloudKit. We never have access to your iCloud data. It is encrypted and private to you.</p>
-<p>For more information, visit our <a href="/privacy/">Privacy Policy</a>.</p></div>
+<p>For more information, visit our <a href="/privacy/" title="Read our Privacy Policy">Privacy Policy</a>.</p></div>
                         </div>
                     </div>
                 </section>
@@ -276,8 +298,8 @@
                         <div class="footer-mini-legal">
                             <div class="footer-mini-legal-copyright">Copyright &copy; 2026 Mike Vincent. All rights reserved.</div>
                             <div class="footer-mini-legal-links">
-                                <a class="footer-mini-legal-link" href="/privacy/">Privacy Policy</a>
-                                <a class="footer-mini-legal-link" href="/terms/">Terms of Use</a>
+                                <a class="footer-mini-legal-link" href="/privacy/" title="Read our Privacy Policy">Privacy Policy</a>
+                                <a class="footer-mini-legal-link" href="/terms/" title="Read our Terms of Use">Terms of Use</a>
                             </div>
                         </div>
                     </section>
