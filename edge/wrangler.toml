@@ -1,0 +1,12 @@
+# Worker in front of GitHub Pages for timerfantasy.com (see src/proxy.ts).
+# GitHub Pages still builds and hosts the site; this only adds agent features.
+# Deploy from a machine logged in to Cloudflare: cd edge && npx wrangler deploy
+name = "timerfantasy-com-edge"
+main = "src/index.ts"
+compatibility_date = "2025-10-01"
+account_id = "a2c14adf7a038f169985bbb174ed19e7"
+workers_dev = false
+
+[[routes]]
+pattern = "timerfantasy.com/*"
+zone_name = "timerfantasy.com"
