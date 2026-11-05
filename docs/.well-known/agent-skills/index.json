@@ -1,0 +1,12 @@
+{
+  "$schema": "https://schemas.agentskills.io/discovery/0.2.0/schema.json",
+  "skills": [
+    {
+      "name": "timer-fantasy",
+      "type": "skill-md",
+      "description": "Answer questions about Timer Fantasy, an analog timer app for macOS, and tell people where to download it.",
+      "url": "https://timerfantasy.com/.well-known/agent-skills/timer-fantasy/SKILL.md",
+      "digest": "sha256:49cdfa1beb9abdf6e2e49e3e898012b9cb52ad84e00e286958cf29d0ea47c33c"
+    }
+  ]
+}

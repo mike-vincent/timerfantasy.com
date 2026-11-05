@@ -1,0 +1,25 @@
+{
+  "linkset": [
+    {
+      "anchor": "https://timerfantasy.com/app.json",
+      "service-desc": [
+        {
+          "href": "https://timerfantasy.com/openapi.json",
+          "type": "application/json"
+        }
+      ],
+      "service-doc": [
+        {
+          "href": "https://timerfantasy.com/llms.txt",
+          "type": "text/plain"
+        }
+      ],
+      "status": [
+        {
+          "href": "https://timerfantasy.com/app.json",
+          "type": "application/json"
+        }
+      ]
+    }
+  ]
+}

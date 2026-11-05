@@ -1,0 +1,32 @@
+{
+  "specVersion": "1.0",
+  "host": {
+    "displayName": "Timer Fantasy",
+    "identifier": "did:web:timerfantasy.com"
+  },
+  "entries": [
+    {
+      "identifier": "urn:air:timerfantasy.com:app:timer-fantasy",
+      "displayName": "Timer Fantasy app facts",
+      "type": "application/json",
+      "url": "https://timerfantasy.com/app.json",
+      "representativeQueries": [
+        "analog timer app for Mac",
+        "menu bar countdown timer for macOS",
+        "Mac app to run multiple timers at once",
+        "where can I download Timer Fantasy"
+      ]
+    },
+    {
+      "identifier": "urn:air:timerfantasy.com:skill:timer-fantasy",
+      "displayName": "Timer Fantasy agent skill",
+      "type": "text/markdown",
+      "url": "https://timerfantasy.com/.well-known/agent-skills/timer-fantasy/SKILL.md",
+      "representativeQueries": [
+        "what is Timer Fantasy",
+        "does Timer Fantasy sync timers with iCloud",
+        "what macOS version does Timer Fantasy need"
+      ]
+    }
+  ]
+}

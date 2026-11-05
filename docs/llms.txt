@@ -1,0 +1,33 @@
+# Timer Fantasy
+
+> Timer Fantasy is an app of beautiful analog timers for the Mac. You set a timer with a simple drag on an elegant clock face, run as many timers as you like, and track countdowns from the menu bar. It needs macOS 14 Sonoma or later and is available to download on TestFlight.
+
+Timer Fantasy is made by Mike Vincent. The app does not collect, store, or transmit any personal information. There are no analytics, no tracking, no advertising, and no third-party SDKs. Timers can sync across Macs through the user's own iCloud account.
+
+## Site
+
+- [Home](https://timerfantasy.com/): features, a getting started guide, and system requirements
+- [Download on TestFlight](https://testflight.apple.com/join/mqQrQFHC)
+- [Privacy Policy](https://timerfantasy.com/privacy/)
+- [Terms of Use](https://timerfantasy.com/terms/)
+
+## Features
+
+- Drag on an analog clock face to set a timer, or pick an end time with End At mode
+- Preset buttons for 60, 45, 30, 20, 15, 10, and 5 minutes
+- 14 clock face scales from 60 seconds to 96 hours, with Auto Zoom
+- Unlimited simultaneous timers, each with its own label, color, alarm sound, and loop setting
+- Timer History, menu bar controls, iCloud sync, and Siri Shortcuts
+
+## Agents
+
+- [App facts (JSON)](https://timerfantasy.com/app.json): name, description, platform, requirements, download link, author, and policy links
+- [OpenAPI description](https://timerfantasy.com/openapi.json): the public read-only files on this site
+- [API catalog](https://timerfantasy.com/.well-known/api-catalog): RFC 9727 linkset
+- [Agent skill: timer-fantasy](https://timerfantasy.com/.well-known/agent-skills/timer-fantasy/SKILL.md): how to answer questions about the app
+- [Agent skills index](https://timerfantasy.com/.well-known/agent-skills/index.json)
+- [AI catalog](https://timerfantasy.com/.well-known/ai-catalog.json)
+
+## Author
+
+- [Mike Vincent](https://mikevincent.dev/)
