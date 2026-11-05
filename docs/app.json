@@ -1,0 +1,38 @@
+{
+  "name": "Timer Fantasy",
+  "description": "Beautiful analog timers for your Mac. Set timers with a simple drag on an elegant clock face. Track countdowns from your menu bar.",
+  "url": "https://timerfantasy.com/",
+  "icon": "https://timerfantasy.com/icon.png",
+  "applicationCategory": "UtilitiesApplication",
+  "platform": "macOS",
+  "systemRequirements": [
+    "Mac running macOS 14 Sonoma or later",
+    "Apple silicon or Intel processor",
+    "iCloud account for syncing across devices (optional)"
+  ],
+  "download": {
+    "url": "https://testflight.apple.com/join/mqQrQFHC",
+    "via": "TestFlight"
+  },
+  "author": {
+    "name": "Mike Vincent",
+    "url": "https://mikevincent.dev/"
+  },
+  "features": [
+    "Set a timer by dragging on an analog clock face",
+    "End At mode: pick the time a timer should finish and the app works out the duration",
+    "Preset buttons for 60, 45, 30, 20, 15, 10, and 5 minutes",
+    "14 clock face scales from 60 seconds to 96 hours, with Auto Zoom as time runs down",
+    "Unlimited simultaneous timers, each with its own label, color, alarm sound, and loop setting",
+    "Alarm sounds from 15 built-in macOS system sounds, with an alarm duration of 1 to 60 seconds",
+    "Looping timers for intervals, workouts, and Pomodoro sessions",
+    "Timer History to rerun recent timers",
+    "Menu bar countdown with controls to pause, resume, stop, and dismiss alarms",
+    "iCloud sync of timers and settings across Macs signed into the same iCloud account",
+    "Siri and Shortcuts support, for example \"Start a 10 minute timer in Timer Fantasy\""
+  ],
+  "privacy": "Timer Fantasy does not collect, store, or transmit any personal information. There are no analytics, no tracking, no advertising, and no third-party SDKs. Timer data stays on the device, or in the user's own iCloud account when iCloud sync is on.",
+  "privacyPolicy": "https://timerfantasy.com/privacy/",
+  "termsOfUse": "https://timerfantasy.com/terms/",
+  "documentation": "https://timerfantasy.com/llms.txt"
+}

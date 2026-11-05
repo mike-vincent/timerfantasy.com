@@ -22,6 +22,50 @@
     <meta property="og:image" content="https://timerfantasy.com/icon.png" />
     <meta name="twitter:card" content="summary" />
     <script type="application/ld+json">{"@context": "https://schema.org", "@type": "SoftwareApplication", "name": "Timer Fantasy", "url": "https://timerfantasy.com/", "description": "Beautiful analog timers for your Mac. Set timers with a simple drag on an elegant clock face. Track countdowns from your menu bar.", "operatingSystem": "macOS", "applicationCategory": "UtilitiesApplication", "image": "https://timerfantasy.com/icon.png", "downloadUrl": "https://testflight.apple.com/join/mqQrQFHC", "author": {"@type": "Person", "name": "Mike Vincent", "url": "https://mikevincent.dev/"}}</script>
+    <link rel="ai-catalog" href="/.well-known/ai-catalog.json" />
+    <link rel="api-catalog" href="/.well-known/api-catalog" />
+    <link rel="describedby" type="text/plain" href="/llms.txt" />
+    <script>
+    // WebMCP: read-only tools for AI agents in the browser. Does nothing unless the browser has modelContext.
+    (function () {
+        var tools = [
+            { name: 'get_app_info', description: 'Get facts about Timer Fantasy, the analog timer app for macOS: description, features, system requirements, download link, author, and privacy and terms links.', url: '/app.json' },
+            { name: 'get_download_link', description: 'Get where to download Timer Fantasy for macOS and its system requirements.', url: '/app.json', pick: ['name', 'download', 'platform', 'systemRequirements'] }
+        ];
+        var done = false;
+        var ctl = typeof AbortController === 'function' ? new AbortController() : null;
+        function text(t) { return { content: [{ type: 'text', text: t }] }; }
+        function register() {
+            if (done) return;
+            try {
+                var mc = document.modelContext || navigator.modelContext;
+                if (!mc || typeof mc.registerTool !== 'function') return;
+                done = true;
+                tools.forEach(function (t) {
+                    try {
+                        var p = mc.registerTool({
+                            name: t.name,
+                            description: t.description,
+                            inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+                            annotations: { readOnlyHint: true },
+                            execute: function () {
+                                return fetch(t.url, { headers: { Accept: 'application/json' } }).then(function (r) { return r.json(); }).then(function (d) {
+                                    var out = d;
+                                    if (t.pick) { out = {}; t.pick.forEach(function (k) { out[k] = d[k]; }); }
+                                    return text(JSON.stringify(out));
+                                }).catch(function (e) { var r = text('Could not load ' + t.url + ': ' + e); r.isError = true; return r; });
+                            }
+                        }, ctl ? { signal: ctl.signal } : undefined);
+                        if (p && typeof p.catch === 'function') p.catch(function () {});
+                    } catch (e) {}
+                });
+            } catch (e) {}
+        }
+        register();
+        document.addEventListener('DOMContentLoaded', register);
+        window.addEventListener('load', register);
+    })();
+    </script>
 
     <style>
         .icon-hero {
@@ -338,6 +382,7 @@
             </div>
         </div>
     </footer>
+    <form toolname="get_app_info" tooldescription="Get facts about Timer Fantasy for macOS as JSON: features, system requirements, download link, and author." action="/app.json" method="get" hidden aria-hidden="true"></form>
 
 </body>
 

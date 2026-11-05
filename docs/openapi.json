@@ -1,0 +1,178 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Timer Fantasy public files",
+    "version": "1.0.0",
+    "description": "Static, read-only files on timerfantasy.com that describe the Timer Fantasy app for macOS. No authentication. Every path answers GET.",
+    "contact": {
+      "name": "Mike Vincent",
+      "url": "https://mikevincent.dev/"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://timerfantasy.com"
+    }
+  ],
+  "paths": {
+    "/app.json": {
+      "get": {
+        "operationId": "getAppInfo",
+        "summary": "Timer Fantasy app facts",
+        "description": "Name, description, platform, system requirements, features, download link, author, and policy links.",
+        "responses": {
+          "200": {
+            "description": "Timer Fantasy app facts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "name",
+                    "description",
+                    "url",
+                    "platform",
+                    "download"
+                  ],
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "url": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "icon": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "applicationCategory": {
+                      "type": "string"
+                    },
+                    "platform": {
+                      "type": "string"
+                    },
+                    "systemRequirements": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "download": {
+                      "type": "object",
+                      "properties": {
+                        "url": {
+                          "type": "string",
+                          "format": "uri"
+                        },
+                        "via": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "author": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string"
+                        },
+                        "url": {
+                          "type": "string",
+                          "format": "uri"
+                        }
+                      }
+                    },
+                    "features": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "privacy": {
+                      "type": "string"
+                    },
+                    "privacyPolicy": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "termsOfUse": {
+                      "type": "string",
+                      "format": "uri"
+                    },
+                    "documentation": {
+                      "type": "string",
+                      "format": "uri"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/llms.txt": {
+      "get": {
+        "operationId": "getLlmsTxt",
+        "summary": "Summary of the site for LLMs",
+        "description": "Plain text summary of the app with links to every page and machine-readable file.",
+        "responses": {
+          "200": {
+            "description": "Summary of the site for LLMs",
+            "content": {
+              "text/plain": {}
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/agent-skills/index.json": {
+      "get": {
+        "operationId": "getAgentSkillsIndex",
+        "summary": "Agent skills index",
+        "description": "Agent Skills discovery index (v0.2.0) listing the timer-fantasy skill.",
+        "responses": {
+          "200": {
+            "description": "Agent skills index",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/agent-skills/timer-fantasy/SKILL.md": {
+      "get": {
+        "operationId": "getTimerFantasySkill",
+        "summary": "timer-fantasy agent skill",
+        "description": "SKILL.md telling an agent how to answer questions about Timer Fantasy.",
+        "responses": {
+          "200": {
+            "description": "timer-fantasy agent skill",
+            "content": {
+              "text/markdown": {}
+            }
+          }
+        }
+      }
+    },
+    "/.well-known/ai-catalog.json": {
+      "get": {
+        "operationId": "getAiCatalog",
+        "summary": "AI catalog",
+        "description": "Agentic Resource Discovery catalog of the resources on this site.",
+        "responses": {
+          "200": {
+            "description": "AI catalog",
+            "content": {
+              "application/json": {}
+            }
+          }
+        }
+      }
+    }
+  }
+}
